@@ -1,4 +1,18 @@
-// --- lightweight software-PWM state (small shim) ---
+
+const int M1 = 27;
+const int M2 = 14;
+const int M3 = 12;
+const int M4 = 13;
+
+// Additional GPIOs used by simple `code.ino` pattern
+const int P17 = 17;
+const int P19 = 19;
+const int P18 = 18;
+const int P23 = 23;
+const int P32 = 32;
+const int P33 = 33;
+const int P25 = 25;
+const int P26 = 26;// --- lightweight software-PWM state (small shim) ---
 uint32_t pwmLastCycleStart = 0;
 uint32_t pwmPeriodMicros = 20000; // default 20ms period
 uint8_t pwmDuty[4] = {0,0,0,0};
@@ -41,20 +55,7 @@ int b = 1;
 // and avoid using LEDC APIs directly.
 
 // Motor pins (example)
-const int M1 = 27;
-const int M2 = 14;
-const int M3 = 12;
-const int M4 = 13;
 
-// Additional GPIOs used by simple `code.ino` pattern
-const int P17 = 17;
-const int P19 = 19;
-const int P18 = 18;
-const int P23 = 23;
-const int P32 = 32;
-const int P33 = 33;
-const int P25 = 25;
-const int P26 = 26;
 
 const char* STA_SSID = "potato";
 const char* STA_PASS = "potato123";
