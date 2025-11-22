@@ -958,7 +958,10 @@ const char controllerPage[] PROGMEM = R"rawliteral(
 )rawliteral";
 
 void handleRoot() {
-  server.send_P(200, "text/html; charset=utf-8", indexPage);
+  // Redirect root to the provided remote image URL (as requested)
+  const char* redirectUrl = "https://th.bing.com/th?id=ORMS.6ac2c113fac93d6ba4adcdb7c8362d92&pid=Wdp&w=612&h=304&qlt=90&c=1&rs=1&dpr=1.375&p=0";
+  server.sendHeader("Location", String(redirectUrl), true);
+  server.send(302, "text/plain", "");
 }
 
 void handleToggle() {
@@ -1287,6 +1290,12 @@ void setup() {
 
   // Web server routes
   server.on("/", handleRoot);
+  // Redirect favicon requests to same remote image
+  server.on("/favicon.ico", [](){
+    const char* redirectUrl = "https://th.bing.com/th?id=ORMS.6ac2c113fac93d6ba4adcdb7c8362d92&pid=Wdp&w=612&h=304&qlt=90&c=1&rs=1&dpr=1.375&p=0";
+    server.sendHeader("Location", String(redirectUrl), true);
+    server.send(302, "text/plain", "");
+  });
   server.on("/toggle", handleToggle);
   server.on("/status", handleStatus);
   server.on("/functions", [](){ server.send_P(200, "text/html; charset=utf-8", functionsPage); });
