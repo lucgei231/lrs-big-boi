@@ -24,127 +24,16 @@ uint32_t pwmOffTime[4] = {0,0,0,0};
 String lastProxyUrl = "";
 int lastProxyStatus = 0;
 
-// Motor control state used by pattern API
-int motorPhase = 0;   // 0 = A, 1 = B
-int motorDuty = 0;    // informational in digital pattern mode
-bool jumpPending = false;
-int jumpStep = 0;
-unsigned long jumpTimestamp = 0;
-
-// Forward declarations for small helpers
-void applyPatternA();
-void applyPatternB();
-void pwmInit();
-/*
-  ESP32: Connect as station (SSID "potato", password "potato123"),
-  also run an access point "captive wifi" at 192.168.4.1 with a captive DNS,
-  run mDNS as lucas.local, and serve a webpage to toggle LED on pin 2.
-  Requires: WiFi.h, WebServer.h, DNSServer.h, ESPmDNS.h
-*/
-int leftorright;
-int a;
-int b = 1;
-#include <WiFi.h>
-#include <WebServer.h>
-#include <DNSServer.h>
-#include <ESPmDNS.h>
-#include <HTTPClient.h>
-#include <WiFiClientSecure.h>
-#include <WebSocketsServer.h>
-// We'll use a small software PWM driver so the sketch can use analogWrite(pin,duty)
-// and avoid using LEDC APIs directly.
-
-// Motor pins (example)
-
-
-const char* STA_SSID = "potato";
-const char* STA_PASS = "potato123";
-const char* AP_SSID = "SKETCHY WIFI POOPOO";
-const char* AP_PASS = "mypotato123";
-const IPAddress AP_IP(192, 168, 4, 1);
-const IPAddress AP_GW(192, 168, 4, 1);
-const IPAddress AP_SN(255, 255, 255, 0);
-
-WebServer server(80);
-DNSServer dnsServer;
-const char controllerPage[] PROGMEM = R"rawliteral(
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Controller (placeholder)</title>
-  <style>body{font-family:Arial,Helvetica,sans-serif;margin:12px;color:#eef}</style>
-</head>
-<body>
-  <h2>Controller page</h2>
-  <p>The full controller SVG/JS was temporarily removed to resolve a compilation issue. Use the Controller button on the main page to open the controller when the full content is restored.</p>
-  <p><small>Temporary minimal WebSocket client below will still receive 'beep' broadcasts.</small></p>
-  <script>
-   try {
-    const ws = new WebSocket('ws://' + location.hostname + ':81/');
-    ws.onopen = () => console.log('Controller WS connected');
-    ws.onmessage = evt => {
-      if (evt.data === 'beep') {
-       try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const o = ctx.createOscillator();
-        const g = ctx.createGain();
-        o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.08;
-        o.connect(g); g.connect(ctx.destination); o.start(); setTimeout(()=>{ o.stop(); ctx.close(); }, 180);
-       } catch(e) { console.log('beep failed', e); }
-      }
-    };
-   } catch(e) { console.log('ws error', e); }
-  </script>
-</body>
+    refreshAll(); setInterval(refreshAll,3000);
+   </script>
+  </body>
 </html>
- )rawliteral";
+)rawliteral";
 
-
-const char indexPage[] PROGMEM = R"rawliteral(
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>ESP32 — Super Control Panel</title>
-    <style>
-      :root{--bg:#0f1720;--card:#111827;--muted:#9ca3af;--accent:#10b981;--danger:#ef4444}
-      body{font-family:Inter,Arial,Helvetica,sans-serif;margin:8px;background:linear-gradient(180deg,#071021,#0b1220);color:#e6eef6}
-      .wrap{max-width:1100px;margin:14px auto}
-      header{display:flex;align-items:center;justify-content:space-between}
-      h1{font-weight:700;margin:0 0 8px 0}
-      .grid{display:grid;grid-template-columns:2fr 1fr;gap:12px}
-      .card{background:var(--card);padding:12px;border-radius:10px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
-      .controls{display:flex;flex-wrap:wrap;gap:8px}
-      button{background:var(--accent);border:0;color:#042018;padding:10px 12px;border-radius:8px;cursor:pointer}
-      button.ghost{background:transparent;border:1px solid #1f2937;color:var(--muted)}
-      .muted{color:var(--muted);font-size:13px}
-      label{display:block;font-size:13px;margin-bottom:6px;color:var(--muted)}
-      input[type=range]{width:100%}
-      .row{display:flex;gap:8px;align-items:center}
-      .log{height:180px;overflow:auto;background:#061018;padding:8px;border-radius:6px;font-family:monospace;font-size:12px}
-      .big{font-size:20px;font-weight:700}
-      .small{font-size:12px;color:var(--muted)}
-      footer{margin-top:12px;color:var(--muted);font-size:12px}
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <header>
-        <div>
-          <h1>ESP32 — Super Control Panel</h1>
-          <div class="small">AP: <span id="apip">...</span> • STA: <span id="staip">...</span> • mDNS: <code>lucas.local</code></div>
-        </div>
-  <div class="small">Quick actions: <button onclick="openFunctions()" class="ghost">Functions</button> <button onclick="openController()" class="ghost">Controller</button></div>
-      </header>
-
-      <div class="grid">
-        <section class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div>
-              <div class="big" id="ledLabel">LED: --</div>
+// Note: the large original controllerPage content was removed to avoid duplicate symbol and
+// raw-literal parsing issues. A safe placeholder `controllerPage` is defined near the top of the
+// file and will be served for /controller. Restore the original controller contents into a
+// separate PROGMEM symbol if you want the full SVG/JS back.
               <div class="small">Use the buttons below or API to control</div>
             </div>
             <div style="text-align:right">
