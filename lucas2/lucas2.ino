@@ -71,91 +71,27 @@ const int P26 = 26;
 bool motorRunning = false;
 unsigned long motorLastMs = 0;
 unsigned long MOTOR_INTERVAL = 5000; // ms between pattern toggles (modifiable). Use long interval to mimic code.ino behavior
-int motorPhase = 0; // 0 or 1
-
-// PWM (LEDC) channels for ESP32
-const int PWM_FREQ = 2000;
-const int PWM_RESOLUTION = 8; // 8-bit (0-255)
-const int CH_M1 = 0;
-const int CH_M2 = 1;
-const int CH_M3 = 2;
-const int CH_M4 = 3;
-int motorDuty = 255; // 0-255
-
-// Jump (single-cycle) request state
-bool jumpPending = false;
-int jumpStep = 0; // 0=start,1=second
-unsigned long jumpTimestamp = 0;
-
-// Proxy debug info
-String lastProxyUrl = "";
-int lastProxyStatus = 0;
-
-// Software PWM implementation so sketch uses analogWrite(pin,duty)
-// without relying on LEDC APIs.
-const int pwmPins[4] = { M1, M2, M3, M4 };
-uint8_t pwmDuty[4] = {0,0,0,0}; // 0..255
-bool pwmIsOn[4] = {false,false,false,false};
-uint32_t pwmOffTime[4] = {0,0,0,0};
-uint32_t pwmPeriodMicros = 0;
-uint32_t pwmLastCycleStart = 0;
-
-// analogWrite sets duty (0..255). Changes take effect on the next cycle
-void analogWrite(int pin, int duty) {
-  if (duty < 0) duty = 0; if (duty > 255) duty = 255;
-  for (int i = 0; i < 4; ++i) {
-    if (pwmPins[i] == pin) {
-      pwmDuty[i] = (uint8_t)duty;
-      // immediate shortcuts for 0 and 255 for responsiveness
-      if (duty == 0) {
-        digitalWrite(pin, LOW);
-        pwmIsOn[i] = false;
-        pwmOffTime[i] = 0;
-      } else if (duty == 255) {
-        digitalWrite(pin, HIGH);
-        pwmIsOn[i] = true;
-        pwmOffTime[i] = UINT32_MAX;
-      }
-      return;
-    }
+    <script>
+        let ws = new WebSocket('ws://lucas.local:81/');
+    ws.onopen = () => {
+      console.log('WebSocket opened');
+      const tspan2 = document.getElementById('tspan2');
+      if (tspan2) tspan2.textContent = "Ready";
   }
-}
+    ws.onmessage = evt => {
+      console.log('From ESP32: ' + evt.data);
+      try {
+        if (evt.data === 'beep') {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.08; o.connect(g); g.connect(ctx.destination);
+          o.start(); setTimeout(()=>{ o.stop(); ctx.close(); }, 180);
+        }
+      } catch(e) { console.log('beep failed', e); }
+    };
 
-// Initialize software PWM: store period and ensure pins are low
-void pwmInit() {
-  pwmPeriodMicros = 1000000UL / PWM_FREQ; // period in microseconds
-  pwmLastCycleStart = micros();
-  for (int i = 0; i < 4; ++i) {
-    pwmDuty[i] = 0;
-    pwmIsOn[i] = false;
-    pwmOffTime[i] = 0;
-    pinMode(pwmPins[i], OUTPUT);
-    digitalWrite(pwmPins[i], LOW);
-  }
-}
-
-// Helpers to apply the simple, direct-digital patterns from code.ino
-void applyPatternA() {
-  // pattern A roughly corresponds to: (12 LOW,13 HIGH,14 HIGH,27 LOW,17 HIGH,18 LOW,23 HIGH,19 LOW,25 HIGH,26 LOW,32 HIGH,33 LOW)
-  // Map pins used in this sketch to the same high/low values
-  digitalWrite(M3, LOW);   // 12
-  digitalWrite(M4, HIGH);  // 13
-  digitalWrite(M2, HIGH);  // 14
-  digitalWrite(M1, LOW);   // 27
-  digitalWrite(P17, HIGH);
-  digitalWrite(P18, LOW);
-  digitalWrite(P23, HIGH);
-  digitalWrite(P19, LOW);
-  digitalWrite(P25, HIGH);
-  digitalWrite(P26, LOW);
-  digitalWrite(P32, HIGH);
-  digitalWrite(P33, LOW);
-}
-
-void applyPatternB() {
-  // pattern B roughly corresponds to the inverse pattern used in code.ino second block
-  digitalWrite(M3, HIGH);  // 12
-  digitalWrite(M4, LOW);   // 13
+        const rect = document.getElementById('rect36');
   digitalWrite(M2, LOW);   // 14
   digitalWrite(M1, HIGH);  // 27
   digitalWrite(P17, LOW);
@@ -414,44 +350,20 @@ const char indexPage[] PROGMEM = R"rawliteral(
       // WebSocket listener: receive server messages (e.g. 'beep') and play a short tone
       try {
         let ws = new WebSocket('ws://' + location.hostname + ':81/');
-
-        // Audio unlock helpers (same pattern as used in other page)
-        let audioCtx = null;
-        let audioUnlocked = false;
-        function initAudioOnce() {
-          if (audioUnlocked) return;
-          try {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioCtx.state === 'suspended' && audioCtx.resume) {
-              audioCtx.resume().then(() => { audioUnlocked = true; hideEnableButton(); console.log('Audio unlocked'); }).catch((e)=>{ console.log('Audio resume failed', e); });
-            } else { audioUnlocked = true; hideEnableButton(); }
-          } catch(e) { console.log('initAudio failed', e); }
-        }
-        function hideEnableButton(){ const b=document.getElementById('enableAudioBtn'); if(b) b.style.display='none'; }
-        (function addEnableButton(){ try {
-          const b = document.createElement('button'); b.id = 'enableAudioBtn'; b.textContent = 'Enable audio';
-          b.style.position = 'fixed'; b.style.right = '10px'; b.style.bottom = '10px'; b.style.zIndex = 10000;
-          b.style.padding = '8px 12px'; b.style.background = '#007bff'; b.style.color = '#fff'; b.style.border = 'none'; b.style.borderRadius = '4px';
-          b.onclick = initAudioOnce; document.body.appendChild(b);
-        } catch(e){} })();
-        ['click','touchstart','keydown'].forEach(evt => { function onfirst(){ try{ initAudioOnce(); }catch(e){}; window.removeEventListener(evt,onfirst);} window.addEventListener(evt,onfirst); });
-
         ws.onopen = () => console.log('WS connected to ESP32');
         ws.onmessage = evt => {
           try {
             if (evt.data === 'beep') {
-              if (audioCtx && (audioUnlocked || audioCtx.state === 'running')) {
-                const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
-                o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.08; o.connect(g); g.connect(audioCtx.destination);
-                o.start(); setTimeout(()=>{ o.stop(); }, 180);
-              } else {
-                try {
-                  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                  const o = ctx.createOscillator(); const g = ctx.createGain();
-                  o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.08; o.connect(g); g.connect(ctx.destination);
-                  o.start(); setTimeout(()=>{ o.stop(); ctx.close(); }, 180);
-                } catch(e){ console.log('beep failed', e); try{ navigator.vibrate && navigator.vibrate(200); }catch(e){} try{ const old=document.body.style.backgroundColor; document.body.style.backgroundColor='#ff0'; setTimeout(()=>{ document.body.style.backgroundColor = old; },200); }catch(e){} }
-              }
+              // small beep using Web Audio API (temporary context)
+              const ctx = new (window.AudioContext || window.webkitAudioContext)();
+              const o = ctx.createOscillator();
+              const g = ctx.createGain();
+              o.type = 'sine';
+              o.frequency.value = 880;
+              g.gain.value = 0.08;
+              o.connect(g); g.connect(ctx.destination);
+              o.start();
+              setTimeout(()=>{ o.stop(); ctx.close(); }, 180);
             }
           } catch(e) { console.log('beep handling failed', e); }
         };
