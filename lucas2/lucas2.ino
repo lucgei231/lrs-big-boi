@@ -71,38 +71,6 @@ const int P26 = 26;
 bool motorRunning = false;
 unsigned long motorLastMs = 0;
 unsigned long MOTOR_INTERVAL = 5000; // ms between pattern toggles (modifiable). Use long interval to mimic code.ino behavior
-    <script>
-        let ws = new WebSocket('ws://lucas.local:81/');
-    ws.onopen = () => {
-      console.log('WebSocket opened');
-      const tspan2 = document.getElementById('tspan2');
-      if (tspan2) tspan2.textContent = "Ready";
-  }
-    ws.onmessage = evt => {
-      console.log('From ESP32: ' + evt.data);
-      try {
-        if (evt.data === 'beep') {
-          const ctx = new (window.AudioContext || window.webkitAudioContext)();
-          const o = ctx.createOscillator();
-          const g = ctx.createGain();
-          o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.08; o.connect(g); g.connect(ctx.destination);
-          o.start(); setTimeout(()=>{ o.stop(); ctx.close(); }, 180);
-        }
-      } catch(e) { console.log('beep failed', e); }
-    };
-
-        const rect = document.getElementById('rect36');
-  digitalWrite(M2, LOW);   // 14
-  digitalWrite(M1, HIGH);  // 27
-  digitalWrite(P17, LOW);
-  digitalWrite(P18, HIGH);
-  digitalWrite(P23, LOW);
-  digitalWrite(P19, HIGH);
-  digitalWrite(P25, LOW);
-  digitalWrite(P26, HIGH);
-  digitalWrite(P32, LOW);
-  digitalWrite(P33, HIGH);
-}
 
 // Call frequently (from loop) to update PWM outputs. Non-blocking.
 void pwmUpdate() {
