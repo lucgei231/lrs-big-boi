@@ -1,0 +1,82 @@
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(9600);
+  pinMode(17, OUTPUT);
+  pinMode(19, OUTPUT);
+  pinMode(18, OUTPUT);
+  pinMode(23, OUTPUT);
+  pinMode(32, OUTPUT);
+  pinMode(33, OUTPUT);
+  pinMode(25, OUTPUT);
+  pinMode(26, OUTPUT);
+  pinMode(27, OUTPUT);
+  pinMode(14, OUTPUT);
+  pinMode(12, OUTPUT);
+  pinMode(13, OUTPUT);
+  digitalWrite(17, LOW);
+  digitalWrite(19, LOW);
+  digitalWrite(18, LOW);
+  digitalWrite(23, LOW);
+  digitalWrite(32, LOW);
+  digitalWrite(33, LOW);
+  digitalWrite(25, LOW);
+  digitalWrite(26, LOW);
+  digitalWrite(27, LOW);
+  digitalWrite(14, LOW);
+  digitalWrite(12, LOW);
+  digitalWrite(13, LOW);
+  
+}
+void loop() {
+  // put your main code here, to run repeatedly:
+    digitalWrite(17, LOW);
+  digitalWrite(19, LOW);
+  digitalWrite(18, LOW);
+  digitalWrite(23, LOW);
+  digitalWrite(32, LOW);
+  digitalWrite(33, LOW);
+  digitalWrite(25, LOW);
+  digitalWrite(26, LOW);
+  digitalWrite(27, LOW);
+  digitalWrite(14, LOW);
+  digitalWrite(12, LOW);
+  digitalWrite(13, LOW);
+    digitalWrite(12, LOW);
+    digitalWrite(13, HIGH);
+    digitalWrite(14, HIGH);
+    digitalWrite(27, LOW);
+    digitalWrite(17, HIGH);
+    digitalWrite(18, LOW);
+    digitalWrite(23, HIGH);
+    digitalWrite(19, LOW);
+    digitalWrite(25, HIGH);
+    digitalWrite(26, LOW);
+    digitalWrite(32, HIGH);
+    digitalWrite(33, LOW);
+    delay(5000);
+      digitalWrite(17, LOW);
+  digitalWrite(19, LOW);
+  digitalWrite(18, LOW);
+  digitalWrite(23, LOW);
+  digitalWrite(32, LOW);
+  digitalWrite(33, LOW);
+  digitalWrite(25, LOW);
+  digitalWrite(26, LOW);
+  digitalWrite(27, LOW);
+  digitalWrite(14, LOW);
+  digitalWrite(12, LOW);
+  digitalWrite(13, LOW);
+    digitalWrite(12, HIGH);
+    digitalWrite(13, LOW);
+    digitalWrite(14, LOW);
+    digitalWrite(27, HIGH);
+    digitalWrite(25, LOW);
+    digitalWrite(26, HIGH);
+    digitalWrite(32, LOW);
+    digitalWrite(33, HIGH);
+    digitalWrite(19, HIGH);
+    digitalWrite(18, HIGH);
+    digitalWrite(23, LOW);
+    digitalWrite(17, LOW);
+    delay(5000);
+}
