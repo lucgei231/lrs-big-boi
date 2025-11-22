@@ -414,20 +414,44 @@ const char indexPage[] PROGMEM = R"rawliteral(
       // WebSocket listener: receive server messages (e.g. 'beep') and play a short tone
       try {
         let ws = new WebSocket('ws://' + location.hostname + ':81/');
+
+        // Audio unlock helpers (same pattern as used in other page)
+        let audioCtx = null;
+        let audioUnlocked = false;
+        function initAudioOnce() {
+          if (audioUnlocked) return;
+          try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended' && audioCtx.resume) {
+              audioCtx.resume().then(() => { audioUnlocked = true; hideEnableButton(); console.log('Audio unlocked'); }).catch((e)=>{ console.log('Audio resume failed', e); });
+            } else { audioUnlocked = true; hideEnableButton(); }
+          } catch(e) { console.log('initAudio failed', e); }
+        }
+        function hideEnableButton(){ const b=document.getElementById('enableAudioBtn'); if(b) b.style.display='none'; }
+        (function addEnableButton(){ try {
+          const b = document.createElement('button'); b.id = 'enableAudioBtn'; b.textContent = 'Enable audio';
+          b.style.position = 'fixed'; b.style.right = '10px'; b.style.bottom = '10px'; b.style.zIndex = 10000;
+          b.style.padding = '8px 12px'; b.style.background = '#007bff'; b.style.color = '#fff'; b.style.border = 'none'; b.style.borderRadius = '4px';
+          b.onclick = initAudioOnce; document.body.appendChild(b);
+        } catch(e){} })();
+        ['click','touchstart','keydown'].forEach(evt => { function onfirst(){ try{ initAudioOnce(); }catch(e){}; window.removeEventListener(evt,onfirst);} window.addEventListener(evt,onfirst); });
+
         ws.onopen = () => console.log('WS connected to ESP32');
         ws.onmessage = evt => {
           try {
             if (evt.data === 'beep') {
-              // small beep using Web Audio API
-              const ctx = new (window.AudioContext || window.webkitAudioContext)();
-              const o = ctx.createOscillator();
-              const g = ctx.createGain();
-              o.type = 'sine';
-              o.frequency.value = 880;
-              g.gain.value = 0.08;
-              o.connect(g); g.connect(ctx.destination);
-              o.start();
-              setTimeout(()=>{ o.stop(); ctx.close(); }, 180);
+              if (audioCtx && (audioUnlocked || audioCtx.state === 'running')) {
+                const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+                o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.08; o.connect(g); g.connect(audioCtx.destination);
+                o.start(); setTimeout(()=>{ o.stop(); }, 180);
+              } else {
+                try {
+                  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                  const o = ctx.createOscillator(); const g = ctx.createGain();
+                  o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.08; o.connect(g); g.connect(ctx.destination);
+                  o.start(); setTimeout(()=>{ o.stop(); ctx.close(); }, 180);
+                } catch(e){ console.log('beep failed', e); try{ navigator.vibrate && navigator.vibrate(200); }catch(e){} try{ const old=document.body.style.backgroundColor; document.body.style.backgroundColor='#ff0'; setTimeout(()=>{ document.body.style.backgroundColor = old; },200); }catch(e){} }
+              }
             }
           } catch(e) { console.log('beep handling failed', e); }
         };
@@ -811,20 +835,85 @@ const char controllerPage[] PROGMEM = R"rawliteral(
     </div>
     <script>
         let ws = new WebSocket('ws://lucas.local:81/');
+
+    // Audio unlock helpers: create/resume an AudioContext on first user gesture
+    let audioCtx = null;
+    let audioUnlocked = false;
+
+    function initAudioOnce() {
+      if (audioUnlocked) return;
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended' && audioCtx.resume) {
+          audioCtx.resume().then(() => { audioUnlocked = true; hideEnableButton(); console.log('Audio unlocked'); }).catch((e)=>{ console.log('Audio resume failed', e); });
+        } else {
+          audioUnlocked = true; hideEnableButton();
+        }
+      } catch(e) { console.log('initAudio failed', e); }
+    }
+
+    function hideEnableButton(){ const b=document.getElementById('enableAudioBtn'); if(b) b.style.display='none'; }
+
+    (function addEnableButton(){
+      // small visible button so users can click once to enable audio (required by many browsers)
+      try {
+        const b = document.createElement('button');
+        b.id = 'enableAudioBtn';
+        b.textContent = 'Enable audio';
+        b.style.position = 'fixed';
+        b.style.right = '10px';
+        b.style.bottom = '10px';
+        b.style.zIndex = 10000;
+        b.style.padding = '8px 12px';
+        b.style.background = '#007bff'; b.style.color = '#fff'; b.style.border = 'none'; b.style.borderRadius = '4px';
+        b.onclick = initAudioOnce;
+        document.body.appendChild(b);
+      } catch(e) { /* ignore DOM errors in SVG-only contexts */ }
+    })();
+
+    // also try to unlock on the first general user gesture
+    ['click','touchstart','keydown'].forEach(evt => {
+      function onfirst() { try { initAudioOnce(); } catch(e){}; window.removeEventListener(evt, onfirst); }
+      window.addEventListener(evt, onfirst);
+    });
+
     ws.onopen = () => {
       console.log('WebSocket opened');
       const tspan2 = document.getElementById('tspan2');
-      tspan2.textContent = "Ready";
-  }
+      if (tspan2) tspan2.textContent = "Ready";
+    };
+
     ws.onmessage = evt => {
       console.log('From ESP32: ' + evt.data);
       try {
         if (evt.data === 'beep') {
-          const ctx = new (window.AudioContext || window.webkitAudioContext)();
-          const o = ctx.createOscillator();
-          const g = ctx.createGain();
-          o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.08; o.connect(g); g.connect(ctx.destination);
-          o.start(); setTimeout(()=>{ o.stop(); ctx.close(); }, 180);
+          // Prefer unlocked shared AudioContext
+          if (audioCtx && (audioUnlocked || audioCtx.state === 'running')) {
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.08;
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(); setTimeout(()=>{ o.stop(); }, 180);
+          } else {
+            // Last-resort: try a temporary AudioContext (may be blocked by autoplay policies)
+            try {
+              const ctx = new (window.AudioContext || window.webkitAudioContext)();
+              const o = ctx.createOscillator();
+              const g = ctx.createGain();
+              o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.08;
+              o.connect(g); g.connect(ctx.destination);
+              o.start(); setTimeout(()=>{ o.stop(); ctx.close(); }, 180);
+            } catch(e){
+              console.log('beep failed', e);
+              // graceful fallbacks: vibrate (mobile) and a quick visual flash
+              try { navigator.vibrate && navigator.vibrate(200); } catch(e){}
+              try {
+                const old = document.body.style.backgroundColor;
+                document.body.style.backgroundColor = '#ff0';
+                setTimeout(()=>{ document.body.style.backgroundColor = old; }, 200);
+              } catch(e){}
+            }
+          }
         }
       } catch(e) { console.log('beep failed', e); }
     };
