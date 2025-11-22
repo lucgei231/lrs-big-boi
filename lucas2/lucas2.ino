@@ -40,6 +40,22 @@ int b = 1;
 // We'll use a small software PWM driver so the sketch can use analogWrite(pin,duty)
 // and avoid using LEDC APIs directly.
 
+// Motor pins (example)
+const int M1 = 27;
+const int M2 = 14;
+const int M3 = 12;
+const int M4 = 13;
+
+// Additional GPIOs used by simple `code.ino` pattern
+const int P17 = 17;
+const int P19 = 19;
+const int P18 = 18;
+const int P23 = 23;
+const int P32 = 32;
+const int P33 = 33;
+const int P25 = 25;
+const int P26 = 26;
+
 const char* STA_SSID = "potato";
 const char* STA_PASS = "potato123";
 const char* AP_SSID = "SKETCHY WIFI POOPOO";
