@@ -892,7 +892,7 @@ const char controllerPage[] PROGMEM = R"rawliteral(
             tspan39.textContent = 100;
             ws.send('lr,100');
             break;
-              case 'space':
+          case 'space':
             tspan39.textContent = 100;
             ws.send('stop,');
             break;
