@@ -27,104 +27,39 @@ const IPAddress AP_SN(255, 255, 255, 0);
 
 WebServer server(80);
 DNSServer dnsServer;
-// WebSocket server for controller page
-WebSocketsServer webSocket = WebSocketsServer(81);
-
-// Forward declaration for WebSocket event handler (defined later)
-void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
-
-const byte DNS_PORT = 53;
-const int LED_PIN = 2;
-bool ledState = false;
-
-// Motor pins (example)
-const int M1 = 27;
-const int M2 = 14;
-const int M3 = 12;
-const int M4 = 13;
-
-// Additional GPIOs used by simple `code.ino` pattern
-const int P17 = 17;
-const int P19 = 19;
-const int P18 = 18;
-const int P23 = 23;
-const int P32 = 32;
-const int P33 = 33;
-const int P25 = 25;
-const int P26 = 26;
-
-/*
-  NOTE - wiring/behavior difference (remembered):
-  - The small test `code.ino` in the workspace toggles individual GPIOs
-    in a pattern that makes the hardware appear to "turn left then right".
-  - `lucas2.ino` is written to treat M1/M2 as the forward pair and
-    M3/M4 as the backward/turn pair. I adjusted movement logic so:
-      * Forward/back endpoints drive BOTH pins of the pair (M1+M2 or M3+M4)
-      * Joystick (WebSocket) now sets pins directly (non-blocking)
-      * turnLeft/turnRight pivot the device using the correct side pair
-    This avoids the one-sided spin seen with the simplistic toggles in
-    `code.ino`. If your H-bridge wiring inverts a motor, we can swap or
-    invert the pin mapping later.
-*/
-
-// Motor runtime state
-bool motorRunning = false;
-unsigned long motorLastMs = 0;
-unsigned long MOTOR_INTERVAL = 5000; // ms between pattern toggles (modifiable). Use long interval to mimic code.ino behavior
-
-// Call frequently (from loop) to update PWM outputs. Non-blocking.
-void pwmUpdate() {
-  uint32_t now = micros();
-  // Start a new cycle if we've passed the period
-  if ((uint32_t)(now - pwmLastCycleStart) >= pwmPeriodMicros) {
-    pwmLastCycleStart = now;
-    for (int i = 0; i < 4; ++i) {
-      uint8_t d = pwmDuty[i];
-      int pin = pwmPins[i];
-      if (d == 0) {
-        digitalWrite(pin, LOW);
-        pwmIsOn[i] = false;
-        pwmOffTime[i] = 0;
-      } else if (d >= 255) {
-        digitalWrite(pin, HIGH);
-        pwmIsOn[i] = true;
-        pwmOffTime[i] = UINT32_MAX;
-      } else {
-        // Turn on, schedule off time within this period
-        digitalWrite(pin, HIGH);
-        pwmIsOn[i] = true;
-        uint32_t onTime = ((uint32_t)d * pwmPeriodMicros) / 255UL;
-        pwmOffTime[i] = pwmLastCycleStart + onTime;
+const char controllerPage[] PROGMEM = R"rawliteral(
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Controller (placeholder)</title>
+  <style>body{font-family:Arial,Helvetica,sans-serif;margin:12px;color:#eef}</style>
+</head>
+<body>
+  <h2>Controller page</h2>
+  <p>The full controller SVG/JS was temporarily removed to resolve a compilation issue. Use the Controller button on the main page to open the controller when the full content is restored.</p>
+  <p><small>Temporary minimal WebSocket client below will still receive 'beep' broadcasts.</small></p>
+  <script>
+   try {
+    const ws = new WebSocket('ws://' + location.hostname + ':81/');
+    ws.onopen = () => console.log('Controller WS connected');
+    ws.onmessage = evt => {
+      if (evt.data === 'beep') {
+       try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.08;
+        o.connect(g); g.connect(ctx.destination); o.start(); setTimeout(()=>{ o.stop(); ctx.close(); }, 180);
+       } catch(e) { console.log('beep failed', e); }
       }
-    }
-  }
-
-  // Turn off pins whose on-time has elapsed
-  for (int i = 0; i < 4; ++i) {
-    if (pwmIsOn[i] && pwmOffTime[i] != UINT32_MAX) {
-      if ((uint32_t)(now - pwmLastCycleStart) >= (uint32_t)(pwmOffTime[i] - pwmLastCycleStart)) {
-        digitalWrite(pwmPins[i], LOW);
-        pwmIsOn[i] = false;
-      }
-    }
-  }
-}
-
-// Wait for given milliseconds while continuing to service network, websockets and PWM
-void waitWithService(unsigned long ms) {
-  unsigned long end = millis() + ms;
-  while ((long)(end - millis()) > 0) {
-    // keep PWM running so analogWrite has visible output
-    pwmUpdate();
-    // keep webserver and DNS responsive
-    server.handleClient();
-    dnsServer.processNextRequest();
-    // service WebSocket connections
-    webSocket.loop();
-    // small sleep to yield CPU
-    delay(1);
-  }
-}
+    };
+   } catch(e) { console.log('ws error', e); }
+  </script>
+</body>
+</html>
+ )rawliteral";
 
 
 const char indexPage[] PROGMEM = R"rawliteral(
