@@ -999,10 +999,6 @@ void handleProxy() {
     return;
   }
 
-  // Try plain HTTP first, then HTTPS if HTTP fails. Resolve host via STA DNS to avoid captive-AP DNS loop.
-  int finalCode = -1;
-  String finalType = "text/html; charset=utf-8";
-
   // Parse possible host:port in Host header
   String hostHeader = host;
   String hostName = hostHeader;
@@ -1013,75 +1009,47 @@ void handleProxy() {
     explicitPort = hostHeader.substring(colonPos + 1).toInt();
   }
 
+  // Try HTTP then HTTPS (if HTTP fails)
   for (int pass = 0; pass < 2; ++pass) {
     bool useHttps = (pass == 1);
     int port = explicitPort ? explicitPort : (useHttps ? 443 : 80);
 
-    IPAddress remoteIP;
-    if (!WiFi.hostByName(hostName.c_str(), remoteIP)) {
-      Serial.print("DNS resolve failed for "); Serial.println(hostName);
-      continue; // try next (https) or fail
-    }
+    String url = String(useHttps ? "https://" : "http://") + hostName;
+    if (explicitPort) url += String(":") + String(explicitPort);
+    url += uri;
 
-    // If resolved to our AP or local IP, abort to avoid looping back to ourselves
-    if (remoteIP == AP_IP || remoteIP == WiFi.softAPIP() || remoteIP == WiFi.localIP()) {
-      Serial.print("Resolved host resolves to local AP/IP (loop): "); Serial.println(remoteIP);
-      break;
-    }
-
-    String targetIp = remoteIP.toString();
-    lastProxyUrl = String(useHttps ? "https://" : "http://") + hostHeader + uri;
-    Serial.print("Proxying to IP: "); Serial.print(targetIp); Serial.print(":"); Serial.print(port); Serial.print(" "); Serial.println(uri);
+    Serial.print("Proxying to URL: "); Serial.println(url);
 
     HTTPClient http;
-    WiFiClient *clientPtr = nullptr;
     WiFiClientSecure *secure = nullptr;
+    int httpCode = -1;
     if (useHttps) {
       secure = new WiFiClientSecure();
       secure->setInsecure();
-      clientPtr = secure;
-      http.begin(*clientPtr, targetIp, port, uri, true);
+      if (!http.begin(*secure, url)) {
+        Serial.println("http.begin(secure,url) failed");
+        delete secure; secure = nullptr;
+        continue;
+      }
     } else {
-      http.begin(targetIp, port, uri);
+      if (!http.begin(url)) {
+        Serial.println("http.begin(url) failed");
+        continue;
+      }
     }
 
-    // Preserve original Host header when connecting by IP
+    // Preserve Host header
     http.addHeader("Host", hostHeader);
 
-    int httpCode = http.GET();
-    finalCode = httpCode;
+    httpCode = http.GET();
     lastProxyStatus = httpCode;
 
     if (httpCode > 0) {
       String cType = http.header("Content-Type");
-      if (cType.length() > 0) finalType = cType;
-
-      // Try to stream the response to the client to avoid buffering large strings
-      Stream *upstream = http.getStreamPtr();
-      if (upstream != nullptr) {
-        // send headers first with the real HTTP status
-        server.sendHeader("Connection", "close");
-        server.send(httpCode, finalType.c_str(), "");
-        WiFiClient client = server.client();
-        const size_t BUF_SZ = 512;
-        uint8_t buf[BUF_SZ];
-        while (http.connected()) {
-          int avail = upstream->available();
-          if (avail > 0) {
-            int toRead = avail > (int)BUF_SZ ? BUF_SZ : avail;
-            int r = upstream->readBytes((char*)buf, toRead);
-            if (r > 0) client.write(buf, r);
-          } else {
-            delay(5);
-          }
-        }
-        client.flush();
-      } else {
-        // fallback to buffering small responses
-        String payload = http.getString();
-        server.send(httpCode, finalType.c_str(), payload);
-      }
-
+      if (cType.length() == 0) cType = "text/html; charset=utf-8";
+      // Buffer response (safer across servers). For very large responses this may use memory.
+      String payload = http.getString();
+      server.send(httpCode, cType.c_str(), payload);
       http.end();
       if (secure) { delete secure; secure = nullptr; }
       return;
@@ -1092,7 +1060,7 @@ void handleProxy() {
     Serial.print("Attempt failed, code: "); Serial.println(httpCode);
   }
 
-  Serial.print("All proxy attempts failed or aborted. last code: "); Serial.println(finalCode);
+  Serial.println("All proxy attempts failed or aborted.");
   server.send(502, "text/plain", "Bad Gateway (proxy failed)");
 }
 
