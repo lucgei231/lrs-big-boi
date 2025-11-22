@@ -1,3 +1,26 @@
+// --- lightweight software-PWM state (small shim) ---
+uint32_t pwmLastCycleStart = 0;
+uint32_t pwmPeriodMicros = 20000; // default 20ms period
+uint8_t pwmDuty[4] = {0,0,0,0};
+int pwmPins[4] = {M1, M2, M3, M4};
+bool pwmIsOn[4] = {false,false,false,false};
+uint32_t pwmOffTime[4] = {0,0,0,0};
+
+// Proxy debug trackers
+String lastProxyUrl = "";
+int lastProxyStatus = 0;
+
+// Motor control state used by pattern API
+int motorPhase = 0;   // 0 = A, 1 = B
+int motorDuty = 0;    // informational in digital pattern mode
+bool jumpPending = false;
+int jumpStep = 0;
+unsigned long jumpTimestamp = 0;
+
+// Forward declarations for small helpers
+void applyPatternA();
+void applyPatternB();
+void pwmInit();
 /*
   ESP32: Connect as station (SSID "potato", password "potato123"),
   also run an access point "captive wifi" at 192.168.4.1 with a captive DNS,
