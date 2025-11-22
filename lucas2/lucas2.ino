@@ -1532,6 +1532,53 @@ void leftRight(int LRValue) {
 }
 
 
+  // Basic digital pattern implementations (replicates simple code.ino behavior)
+  void pwmInit() {
+    for (int i = 0; i < 4; ++i) {
+      pinMode(pwmPins[i], OUTPUT);
+      digitalWrite(pwmPins[i], LOW);
+    }
+    // Ensure extra GPIOs used by patterns are outputs
+    pinMode(P17, OUTPUT); pinMode(P18, OUTPUT);
+    pinMode(P19, OUTPUT); pinMode(P23, OUTPUT);
+    pinMode(P25, OUTPUT); pinMode(P26, OUTPUT);
+    pinMode(P32, OUTPUT); pinMode(P33, OUTPUT);
+  }
+
+  void applyPatternA() {
+    // Pattern A: drive one half forward-ish
+    digitalWrite(M1, HIGH);
+    digitalWrite(M2, LOW);
+    digitalWrite(M3, LOW);
+    digitalWrite(M4, HIGH);
+
+    digitalWrite(P17, LOW);
+    digitalWrite(P18, HIGH);
+    digitalWrite(P23, LOW);
+    digitalWrite(P19, HIGH);
+    digitalWrite(P25, LOW);
+    digitalWrite(P26, HIGH);
+    digitalWrite(P32, LOW);
+    digitalWrite(P33, HIGH);
+  }
+
+  void applyPatternB() {
+    // Pattern B: the inverse of A
+    digitalWrite(M1, LOW);
+    digitalWrite(M2, HIGH);
+    digitalWrite(M3, HIGH);
+    digitalWrite(M4, LOW);
+
+    digitalWrite(P17, HIGH);
+    digitalWrite(P18, LOW);
+    digitalWrite(P23, HIGH);
+    digitalWrite(P19, LOW);
+    digitalWrite(P25, HIGH);
+    digitalWrite(P26, LOW);
+    digitalWrite(P32, HIGH);
+    digitalWrite(P33, LOW);
+  }
+
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
   if (type == WStype_TEXT) {
     String msg = String((char*)payload);
