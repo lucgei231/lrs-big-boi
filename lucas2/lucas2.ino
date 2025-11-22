@@ -411,6 +411,28 @@ const char indexPage[] PROGMEM = R"rawliteral(
         }
       });
 
+      // WebSocket listener: receive server messages (e.g. 'beep') and play a short tone
+      try {
+        let ws = new WebSocket('ws://' + location.hostname + ':81/');
+        ws.onopen = () => console.log('WS connected to ESP32');
+        ws.onmessage = evt => {
+          try {
+            if (evt.data === 'beep') {
+              // small beep using Web Audio API
+              const ctx = new (window.AudioContext || window.webkitAudioContext)();
+              const o = ctx.createOscillator();
+              const g = ctx.createGain();
+              o.type = 'sine';
+              o.frequency.value = 880;
+              g.gain.value = 0.08;
+              o.connect(g); g.connect(ctx.destination);
+              o.start();
+              setTimeout(()=>{ o.stop(); ctx.close(); }, 180);
+            }
+          } catch(e) { console.log('beep handling failed', e); }
+        };
+      } catch(e) { console.log('WS init failed', e); }
+
       refreshAll(); setInterval(refreshAll,3000);
     </script>
   </body>
@@ -794,7 +816,18 @@ const char controllerPage[] PROGMEM = R"rawliteral(
       const tspan2 = document.getElementById('tspan2');
       tspan2.textContent = "Ready";
   }
-    ws.onmessage = evt => console.log('From ESP32: ' + evt.data);
+    ws.onmessage = evt => {
+      console.log('From ESP32: ' + evt.data);
+      try {
+        if (evt.data === 'beep') {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.08; o.connect(g); g.connect(ctx.destination);
+          o.start(); setTimeout(()=>{ o.stop(); ctx.close(); }, 180);
+        }
+      } catch(e) { console.log('beep failed', e); }
+    };
 
         const rect = document.getElementById('rect36');
         const marker = document.getElementById('rect41');
@@ -1437,19 +1470,15 @@ void loop() {
   // service WebSocket connections
   webSocket.loop();
 
-    // If user button (GPIO0) pressed, run the blocking move sequence provided
-    if (digitalRead(0) == LOW) {
-      moveForward(200, 2); // move forward at speed 200 for 2 seconds
-      stopMotor();
-      delay(500); // brief pause
-      moveBackward(200, 2); // move backward at speed 200 for 2 seconds
-      stopMotor();
-      delay(500); // brief pause
-      turnLeft(10);
-      turnRight(10);
-    } else {
-      stopMotor();
+    // If user button (GPIO0) pressed, broadcast a 'beep' message to all connected websocket clients
+    // Edge-detect the press so we only broadcast once per button press (not continuously while held)
+    static int __lastBtnState = HIGH;
+    int __btn = digitalRead(0);
+    if (__btn == LOW && __lastBtnState == HIGH) {
+      Serial.println("GPIO0 pressed: broadcasting beep to clients");
+      webSocket.broadcastTXT("beep");
     }
+    __lastBtnState = __btn;
 
     // Optionally print STA status periodically
     static unsigned long lastStatus = 0;
