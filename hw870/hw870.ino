@@ -62,5 +62,6 @@ void loop(){
   Serial.print("S2 A("); Serial.print(SENSOR2_A0); Serial.print("):"); Serial.print(s2_a);
   Serial.print(" D("); Serial.print(SENSOR2_D0); Serial.print("):"); Serial.println(s2_d?1:0);
 
-  delay(300);
+  analogWrite(M1, s1_a / 4); // Scale 0-1023 to 0-255
+  analogWrite(M2, 0); // Scale 0-102
 }
