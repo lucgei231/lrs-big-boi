@@ -1,5 +1,5 @@
 // TCRT5000 IR Sensor 1
-const int SENSOR1_A0 = 2;   // Analog output
+const int SENSOR1_A0 = 4;   // Analog output
 const int SENSOR1_D0 = 16;  // Digital output
 
 // TCRT5000 IR Sensor 2
