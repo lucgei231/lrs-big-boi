@@ -1,4 +1,11 @@
 
+#include <WiFi.h>
+#include <WebServer.h>
+#include <WebSocketsServer.h>
+#include <DNSServer.h>
+#include <MDNS.h>
+#include <HTTPClient.h>
+
 const int M1 = 27;
 const int M2 = 14;
 const int M3 = 12;
@@ -24,103 +31,107 @@ uint32_t pwmOffTime[4] = {0,0,0,0};
 String lastProxyUrl = "";
 int lastProxyStatus = 0;
 
-    refreshAll(); setInterval(refreshAll,3000);
-   </script>
-  </body>
-</html>
-)rawliteral";
+// Configuration
+const char* AP_SSID = "LucasBot";
+const char* AP_IP_STR = "192.168.4.1";
+const char* AP_GW_STR = "192.168.4.1";
+const char* AP_SN_STR = "255.255.255.0";
+const char* STA_SSID = "";
+const char* STA_PASS = "";
+const int DNS_PORT = 53;
+const int LED_PIN = 2;
 
-// Note: the large original controllerPage content was removed to avoid duplicate symbol and
-// raw-literal parsing issues. A safe placeholder `controllerPage` is defined near the top of the
-// file and will be served for /controller. Restore the original controller contents into a
-// separate PROGMEM symbol if you want the full SVG/JS back.
-              <div class="small">Use the buttons below or API to control</div>
-            </div>
-            <div style="text-align:right">
-              <div class="small">Motor: <span id="motorStateMain">stopped</span></div>
-              <div class="small">Duty: <span id="motorDutyMain">0</span> • Interval: <span id="motorIntMain">0</span>ms</div>
-            </div>
-          </div>
+IPAddress AP_IP(192, 168, 4, 1);
+IPAddress AP_GW(192, 168, 4, 1);
+IPAddress AP_SN(255, 255, 255, 0);
 
-          <hr style="margin:10px 0;border:none;border-top:1px solid #071827">
+// Web server & WebSocket
+WebServer server(80);
+DNSServer dnsServer;
+WebSocketsServer webSocket = WebSocketsServer(81);
 
-          <div class="controls">
-            <button id="btnToggleMain">Toggle LED</button>
-            <button id="btnMotorStartMain">Motor Start</button>
-            <button id="btnMotorStopMain">Motor Stop</button>
-            <button id="btnMotorJumpMain">Motor Jump</button>
-            <button id="btnProxyDebugMain" class="ghost">Proxy Debug</button>
-          </div>
+// Motor control state
+bool motorRunning = false;
+bool jumpPending = false;
+int motorPhase = 0;
+int motorDuty = 200;
+unsigned long MOTOR_INTERVAL = 100;
+unsigned long motorLastMs = 0;
+unsigned long jumpTimestamp = 0;
+int jumpStep = 0;
+bool ledState = false;
+int leftorright = 0;
+int a = 10;
+int b = 1;
 
-          <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div>
-              <label>Motor Speed</label>
-              <input id="speedRange" type="range" min="0" max="255" value="200">
-              <div class="row"><button id="btnSetSpeed">Set Speed</button><div class="small" id="speedVal">200</div></div>
-            </div>
-            <div>
-              <label>Motor Interval (ms)</label>
-              <input id="intervalInput" type="number" value="100" style="width:100%">
-              <div class="row"><button id="btnSetInterval">Set Interval</button><div class="small" id="intervalVal">100</div></div>
-            </div>
-          </div>
+// Main index page (served at `/`) — stored in PROGMEM raw literal
+const char indexPage[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Lucas Controller</title>
+    <style>body{font-family:system-ui,Segoe UI,Arial;background:#071827;color:#d7eef8;margin:0;padding:12px} .card{background:#04202b;padding:12px;border-radius:8px} .controls button{margin:4px}</style>
+  </head>
+  <body>
 
-          <hr style="margin:12px 0;border:none;border-top:1px solid #071827">
-
-          <div>
-            <label>Movement controls (Forward/Back/Left/Right/Stop)</label>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              Speed <input id="mv-speed" type="number" value="200" style="width:80px"> 
-              Dur(s) <input id="mv-dur" type="number" value="2" style="width:80px">
-              <button onclick="move('forward')">Forward</button>
-              <button onclick="move('backward')">Backward</button>
-              <button onclick="move('left')">Left</button>
-              <button onclick="move('right')">Right</button>
-              <button onclick="move('stop')" class="ghost">Stop</button>
-            </div>
-          </div>
-
-          <hr style="margin:12px 0;border:none;border-top:1px solid #071827">
-
-          <div>
-            <label>Console / logs</label>
-            <div id="log" class="log">Log output will appear here...</div>
-          </div>
-        </section>
-
-        <aside class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div class="small">Device Info</div>
-            <div><button onclick="refreshAll()" class="ghost">Refresh</button></div>
-          </div>
-          <div style="margin-top:8px">
-            <div><strong>STA IP:</strong> <span id="sta_ip">...</span></div>
-            <div><strong>AP IP:</strong> <span id="ap_ip">192.168.4.1</span></div>
-            <div><strong>Last Proxy:</strong> <pre id="lastProxy" style="white-space:pre-wrap;background:#061018;padding:6px;border-radius:6px;margin-top:6px;font-size:12px"></pre></div>
-          </div>
-
-          <hr style="margin:8px 0;border:none;border-top:1px solid #071827">
-
-          <div>
-            <label>Quick Presets</label>
-            <div class="controls">
-              <button onclick="preset('walk')">Walk</button>
-              <button onclick="preset('dash')">Dash</button>
-              <button onclick="preset('spin')">Spin</button>
-            </div>
-          </div>
-
-          <hr style="margin:8px 0;border:none;border-top:1px solid #071827">
-
-          <div>
-            <label>Advanced</label>
-            <div class="small">Proxy debug, last HTTP status and url</div>
-            <div style="margin-top:8px"><button onclick="showProxyDebug()">Show Proxy Debug</button></div>
-          </div>
-        </aside>
+    <div class="card">
+      <h3>Lucas Robot</h3>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div class="small">Use the buttons below or API to control</div>
+        </div>
+        <div style="text-align:right">
+          <div class="small">Motor: <span id="motorStateMain">stopped</span></div>
+          <div class="small">Duty: <span id="motorDutyMain">0</span> • Interval: <span id="motorIntMain">0</span>ms</div>
+        </div>
       </div>
 
-      <footer>Built-in control panel — no auth. Use carefully.</footer>
+      <hr style="margin:10px 0;border:none;border-top:1px solid #071827">
+
+      <div class="controls">
+        <button id="btnToggleMain">Toggle LED</button>
+        <button id="btnMotorStartMain">Motor Start</button>
+        <button id="btnMotorStopMain">Motor Stop</button>
+        <button id="btnMotorJumpMain">Motor Jump</button>
+        <button id="btnProxyDebugMain" class="ghost">Proxy Debug</button>
+      </div>
+
+      <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label>Motor Speed</label>
+          <input id="speedRange" type="range" min="0" max="255" value="200">
+          <div class="row"><button id="btnSetSpeed">Set Speed</button><div class="small" id="speedVal">200</div></div>
+        </div>
+        <div>
+          <label>Motor Interval (ms)</label>
+          <input id="intervalInput" type="number" value="100" style="width:100%">
+          <div class="row"><button id="btnSetInterval">Set Interval</button><div class="small" id="intervalVal">100</div></div>
+        </div>
+      </div>
+
+      <hr style="margin:12px 0;border:none;border-top:1px solid #071827">
+
+      <div>
+        <label>Movement controls (Forward/Back/Left/Right/Stop)</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          Speed <input id="mv-speed" type="number" value="200" style="width:80px"> 
+          Dur(s) <input id="mv-dur" type="number" value="2" style="width:80px">
+          <button onclick="move('forward')">Forward</button>
+          <button onclick="move('backward')">Backward</button>
+          <button onclick="move('left')">Left</button>
+          <button onclick="move('right')">Right</button>
+          <button onclick="move('stop')" class="ghost">Stop</button>
+        </div>
+      </div>
+
+      <hr style="margin:12px 0;border:none;border-top:1px solid #071827">
+
+      <div>
+        <label>Console / logs</label>
+        <div id="log" class="log">Log output will appear here...</div>
+      </div>
     </div>
 
     <script>
@@ -131,14 +142,8 @@ int lastProxyStatus = 0;
 
       async function refreshAll(){
         const s = await api('/status');
-        try{ const j = JSON.parse(s.text); document.getElementById('ledLabel').textContent = 'LED: '+(j.led? 'ON':'OFF'); }catch(e){}
+        try{ const j = JSON.parse(s.text); /* update simple fields */ }catch(e){}
         const m = await api('/motor/status'); try{ const mj = JSON.parse(m.text); document.getElementById('motorStateMain').textContent = mj.motorRunning? 'running':'stopped'; document.getElementById('motorDutyMain').textContent = mj.motorDuty; document.getElementById('motorIntMain').textContent = mj.motorInterval; }catch(e){}
-        const pd = await api('/proxy-debug'); try{ const pj = JSON.parse(pd.text); document.getElementById('lastProxy').textContent = pj.lastUrl+' ('+pj.lastStatus+')'; }catch(e){}
-        // update IPs
-        document.getElementById('apip').textContent = '192.168.4.1';
-        // try STA ip
-        const sta = await fetch('/sta-ip').catch(()=>null);
-        if (sta && sta.ok){ const t = await sta.text(); document.getElementById('staip').textContent = t; document.getElementById('sta_ip').textContent = t; } else { document.getElementById('staip').textContent = 'unknown'; }
       }
 
       document.getElementById('btnToggleMain').addEventListener('click', async ()=>{ await api('/toggle'); await refreshAll(); });
@@ -163,22 +168,6 @@ int lastProxyStatus = 0;
         await refreshAll();
       }
 
-  function openFunctions(){ window.open('/functions','_blank'); }
-  function openController(){ window.open('/controller','_blank'); }
-      async function showProxyDebug(){ const r = await api('/proxy-debug'); try{ const j = JSON.parse(r.text); alert('Last: '+j.lastUrl+' status:'+j.lastStatus); }catch(e){ alert(r.text || 'no data'); } }
-
-      function preset(which){ if (which==='walk'){ speedRange.value=120; speedVal.textContent=120; document.getElementById('mv-dur').value=2; } if (which==='dash'){ speedRange.value=255; speedVal.textContent=255; document.getElementById('mv-dur').value=1; } if (which==='spin'){ document.getElementById('mv-dur').value=3; move('left'); } }
-
-
-      document.addEventListener('keydown', function(event) {
-
-        if (event.code === 'Space' || event.key === ' ') {
-          event.preventDefault();
-          api('/move/stop');
-          refreshAll();
-        }
-      });
-
       // WebSocket listener: receive server messages (e.g. 'beep') and play a short tone
       try {
         let ws = new WebSocket('ws://' + location.hostname + ':81/');
@@ -186,15 +175,10 @@ int lastProxyStatus = 0;
         ws.onmessage = evt => {
           try {
             if (evt.data === 'beep') {
-              // small beep using Web Audio API (temporary context)
               const ctx = new (window.AudioContext || window.webkitAudioContext)();
               const o = ctx.createOscillator();
               const g = ctx.createGain();
-              o.type = 'sine';
-              o.frequency.value = 880;
-              g.gain.value = 0.08;
-              o.connect(g); g.connect(ctx.destination);
-              o.start();
+              o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.08; o.connect(g); g.connect(ctx.destination); o.start();
               setTimeout(()=>{ o.stop(); ctx.close(); }, 180);
             }
           } catch(e) { console.log('beep handling failed', e); }
@@ -205,7 +189,7 @@ int lastProxyStatus = 0;
     </script>
   </body>
 </html>
-)rawliteral";
+ )rawliteral";
 
 // Controller page (verbatim SVG + JS provided by user)
 const char controllerPage[] PROGMEM = R"rawliteral(
@@ -1011,6 +995,22 @@ void moveBackward(float speed, float duration) {
   stopMotor();
 }
 
+
+// Helper function: wait with WiFi/DNS servicing
+void waitWithService(unsigned long ms) {
+  unsigned long start = millis();
+  while (millis() - start < ms) {
+    server.handleClient();
+    dnsServer.processNextRequest();
+    webSocket.loop();
+    delay(10);
+  }
+}
+
+// Software PWM update function (stub for now)
+void pwmUpdate() {
+  // Software PWM logic if needed; currently using digitalWrite patterns
+}
 
 void setupWiFi() {
   WiFi.mode(WIFI_AP_STA);
