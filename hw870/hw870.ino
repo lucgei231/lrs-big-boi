@@ -6,6 +6,20 @@ const int SENSOR1_D0 = 16;  // Digital output
 const int SENSOR2_A0 = 22;  // Analog output
 const int SENSOR2_D0 = 21;  // Digital output
 
+const int M1 = 27;
+const int M2 = 14;
+const int M3 = 12;
+const int M4 = 13;
+
+// Additional GPIOs used by simple `code.ino` pattern
+const int P17 = 17;
+const int P19 = 19;
+const int P18 = 18;
+const int P23 = 23;
+const int P32 = 32;
+const int P33 = 33;
+const int P25 = 25;
+const int P26 = 26;//
 void setup(){
   Serial.begin(115200);
   
