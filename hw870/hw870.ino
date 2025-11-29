@@ -64,4 +64,6 @@ void loop(){
 
   analogWrite(M1, s1_a / 4); // Scale 0-1023 to 0-255
   analogWrite(M2, 0); // Scale 0-102
+  analogWrite(M3, s2_a / 4); // Scale 0-1023 to 0-255
+  analogWrite(M4, 0); // Scale 0-102
 }
