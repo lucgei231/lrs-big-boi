@@ -1,0 +1,41 @@
+name: Compile Arduino Sketch
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Arduino CLI
+        uses: arduino/setup-arduino-cli@v1
+
+      - name: Update Arduino CLI core index
+        run: arduino-cli core update-index
+
+      - name: Install ESP32 board package
+        run: arduino-cli core install esp32:esp32 --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+
+      - name: Compile hw870.ino
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32 \
+            hw870/hw870.ino
+
+      - name: List compiled artifacts
+        run: |
+          find hw870 -name "*.bin" -o -name "*.elf" | head -20
+
+      - name: Upload compiled artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: hw870-compiled
+          path: hw870/build/esp32.esp32.esp32/
+          retention-days: 30
