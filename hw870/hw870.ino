@@ -1,6 +1,6 @@
-// Ultrasonic sensor (HC-SR04)
+// Ultrasonic sensor (HC-SR04) - using analog read on echo pin
 const int TRIG_PIN = 21;  // Trigger pin
-const int ECHO_PIN = 22;  // Echo pin
+const int ECHO_PIN = 22;  // Echo pin (will read analog)
 
 // TCRT5000 IR Sensor 2
 const int SENSOR2_A0 = 2;   // Analog output
@@ -34,7 +34,7 @@ void setup(){
 
   // Configure ultrasonic pins
   pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
+  pinMode(ECHO_PIN, INPUT);  // Read ECHO_PIN as analog
 
   // Configure Sensor 2 D0 pin as digital input
   pinMode(SENSOR2_D0, INPUT);
@@ -55,43 +55,38 @@ void setup(){
   digitalWrite(M1, LOW); digitalWrite(M2, LOW); digitalWrite(M3, LOW); digitalWrite(M4, LOW);
 }
 
-// Function to measure distance from ultrasonic sensor (HC-SR04)
-float measureDistance() {
-  // Send 10 microsecond pulse to trigger pin
+// Function to read ultrasonic sensor via analog input
+int readUltrasonicAnalog() {
+  // Send trigger pulse
   digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2);
   digitalWrite(TRIG_PIN, HIGH);
   delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
-
-  // Measure the duration of the echo pulse
-  long duration = pulseIn(ECHO_PIN, HIGH, 30000); // timeout after 30ms (~5m max)
   
-  // Calculate distance: speed of sound is ~343 m/s (0.0343 cm/µs)
-  // distance = (duration / 2) * 0.0343 cm
-  float distance = (duration / 2.0) * 0.0343;
-  
-  return distance;
+  // Read the analog voltage on echo pin (proportional to distance)
+  int analogValue = analogRead(ECHO_PIN);
+  return analogValue;
 }
 
 void loop(){
-  // Read ultrasonic distance
-  float distance = measureDistance();
+  // Read ultrasonic sensor analog value
+  int ultrasonicValue = readUltrasonicAnalog();
   
   // Read Sensor 2
   int s2_a = analogRead(SENSOR2_A0);
   int s2_d = digitalRead(SENSOR2_D0);
 
   // Print readings
-  Serial.print("Ultrasonic: ");
-  Serial.print(distance, 1); // 1 decimal place
-  Serial.print(" cm   |   S2 A("); Serial.print(SENSOR2_A0); Serial.print("):"); Serial.print(s2_a);
+  Serial.print("Ultrasonic (Analog): ");
+  Serial.print(ultrasonicValue);
+  Serial.print("   |   S2 A("); Serial.print(SENSOR2_A0); Serial.print("):"); Serial.print(s2_a);
   Serial.print(" D("); Serial.print(SENSOR2_D0); Serial.print("):"); Serial.println(s2_d?1:0);
 
   // Drive motors based on sensor values
   analogWrite(M1, s2_a / 4); // Scale 0-4095 to 0-255 for M1
   analogWrite(M2, 0);
-  analogWrite(M3, (int)distance * 5); // Scale distance to motor speed (0-5cm * 5 = 0-25, capped at 255)
+  analogWrite(M3, ultrasonicValue / 4); // Scale analog reading to 0-255
   analogWrite(M4, 0);
 
   delay(300);
