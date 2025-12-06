@@ -76,16 +76,14 @@ void setup(){
 
 // Function to read ultrasonic sensor via analog input
 int readUltrasonicAnalog() {
-  // Send trigger pulse
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000); // timeout after 30ms (~5m max)
   
-  // Read the analog voltage on echo pin (proportional to distance)
-  int analogValue = analogRead(ECHO_PIN);
-  return analogValue;
+  // Calculate distance: speed of sound is ~343 m/s (0.0343 cm/µs)
+  // distance = (duration / 2) * 0.0343 cm
+  float distance = (duration / 2.0) * 0.0343;
+  
+  return distance;
+
 }
 
 // Function to drive all 6 motors with same speed
@@ -117,7 +115,7 @@ void loop(){
   Serial.print(" D("); Serial.print(SENSOR2_D0); Serial.print("):"); Serial.println(s2_d?1:0);
 
   // Drive all 6 motors with ultrasonic sensor value
-  driveAllMotors(ultrasonicValue);
+  driveAllMotors(readUltrasonicAnalog());
 
   delay(300);
 }
