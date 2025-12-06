@@ -34,7 +34,7 @@ jobs:
           find hw870 -name "*.bin" -o -name "*.elf" | head -20
 
       - name: Upload compiled artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: hw870-compiled
           path: hw870/build/esp32.esp32.esp32/
