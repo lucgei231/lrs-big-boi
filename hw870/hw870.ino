@@ -15,19 +15,30 @@ const int SENSOR2_D0 = 16;  // Digital output
 //m6 d12, d13
 
 
-// Keep motor/aux pins (unused for sensor test but preserved)
-const int M1 = 27;
-const int M2 = 14;
-const int M3 = 12;
-const int M4 = 13;
-const int P17 = 17;
-const int P19 = 19;
-const int P18 = 18;
-const int P23 = 23;
-const int P32 = 32;
-const int P33 = 33;
-const int P25 = 25;
-const int P26 = 26;
+// Motor pin assignments (from user comments)
+// m1: d32, d33
+const int M1_PIN1 = 32;
+const int M1_PIN2 = 33;
+
+// m2: d25, d26
+const int M2_PIN1 = 25;
+const int M2_PIN2 = 26;
+
+// m3: d19, d17
+const int M3_PIN1 = 19;
+const int M3_PIN2 = 17;
+
+// m4: d18, d23
+const int M4_PIN1 = 18;
+const int M4_PIN2 = 23;
+
+// m5: d27, d14
+const int M5_PIN1 = 27;
+const int M5_PIN2 = 14;
+
+// m6: d12, d13
+const int M6_PIN1 = 12;
+const int M6_PIN2 = 13;
 
 void setup(){
   Serial.begin(115200);
@@ -45,14 +56,22 @@ void setup(){
   Serial.print("Sensor2 A0 -> "); Serial.print(SENSOR2_A0); Serial.print(", D0 -> "); Serial.println(SENSOR2_D0);
   Serial.println();
 
-  // Configure motor pins as outputs (kept from original file)
-  pinMode(M1, OUTPUT); pinMode(M2, OUTPUT); pinMode(M3, OUTPUT); pinMode(M4, OUTPUT);
-  pinMode(P17, OUTPUT); pinMode(P19, OUTPUT); pinMode(P18, OUTPUT); pinMode(P23, OUTPUT);
-  pinMode(P32, OUTPUT); pinMode(P33, OUTPUT); pinMode(P25, OUTPUT); pinMode(P26, OUTPUT);
+  // Configure motor pins as outputs
+  pinMode(M1_PIN1, OUTPUT); pinMode(M1_PIN2, OUTPUT);
+  pinMode(M2_PIN1, OUTPUT); pinMode(M2_PIN2, OUTPUT);
+  pinMode(M3_PIN1, OUTPUT); pinMode(M3_PIN2, OUTPUT);
+  pinMode(M4_PIN1, OUTPUT); pinMode(M4_PIN2, OUTPUT);
+  pinMode(M5_PIN1, OUTPUT); pinMode(M5_PIN2, OUTPUT);
+  pinMode(M6_PIN1, OUTPUT); pinMode(M6_PIN2, OUTPUT);
   pinMode(0, INPUT_PULLUP); // user button
 
-  // Turn motors off
-  digitalWrite(M1, LOW); digitalWrite(M2, LOW); digitalWrite(M3, LOW); digitalWrite(M4, LOW);
+  // Turn all motors off
+  digitalWrite(M1_PIN1, LOW); digitalWrite(M1_PIN2, LOW);
+  digitalWrite(M2_PIN1, LOW); digitalWrite(M2_PIN2, LOW);
+  digitalWrite(M3_PIN1, LOW); digitalWrite(M3_PIN2, LOW);
+  digitalWrite(M4_PIN1, LOW); digitalWrite(M4_PIN2, LOW);
+  digitalWrite(M5_PIN1, LOW); digitalWrite(M5_PIN2, LOW);
+  digitalWrite(M6_PIN1, LOW); digitalWrite(M6_PIN2, LOW);
 }
 
 // Function to measure distance from ultrasonic sensor (HC-SR04)
