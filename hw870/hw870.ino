@@ -74,23 +74,32 @@ void setup(){
   digitalWrite(M6_PIN1, LOW); digitalWrite(M6_PIN2, LOW);
 }
 
-// Function to measure distance from ultrasonic sensor (HC-SR04)
-float measureDistance() {
-  // Send 10 microsecond pulse to trigger pin
+// Function to read ultrasonic sensor via analog input
+int readUltrasonicAnalog() {
+  // Send trigger pulse
   digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2);
   digitalWrite(TRIG_PIN, HIGH);
   delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
+  
+  // Read the analog voltage on echo pin (proportional to distance)
+  int analogValue = analogRead(ECHO_PIN);
+  return analogValue;
+}
 
-  // Measure the duration of the echo pulse
-  long duration = pulseIn(ECHO_PIN, HIGH, 30000); // timeout after 30ms (~5m max)
+// Function to drive all 6 motors with same speed
+void driveAllMotors(int speed) {
+  // Scale speed to 0-255 range
+  int motorSpeed = constrain(speed / 16, 0, 255); // scale from 0-4095 to 0-255
   
-  // Calculate distance: speed of sound is ~343 m/s (0.0343 cm/µs)
-  // distance = (duration / 2) * 0.0343 cm
-  float distance = (duration / 2.0) * 0.0343;
-  
-  return distance;
+  // Drive all motors forward
+  analogWrite(M1_PIN1, motorSpeed); digitalWrite(M1_PIN2, LOW);
+  analogWrite(M2_PIN1, motorSpeed); digitalWrite(M2_PIN2, LOW);
+  analogWrite(M3_PIN1, motorSpeed); digitalWrite(M3_PIN2, LOW);
+  analogWrite(M4_PIN1, motorSpeed); digitalWrite(M4_PIN2, LOW);
+  analogWrite(M5_PIN1, motorSpeed); digitalWrite(M5_PIN2, LOW);
+  analogWrite(M6_PIN1, motorSpeed); digitalWrite(M6_PIN2, LOW);
 }
 
 void loop(){
