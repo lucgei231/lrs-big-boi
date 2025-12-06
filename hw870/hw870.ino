@@ -121,7 +121,7 @@ void loop(){
   Serial.print(" D("); Serial.print(SENSOR2_D0); Serial.print("):"); Serial.println(s2_d?1:0);
 
   // Drive all 6 motors with ultrasonic sensor value
-  driveAllMotors(readUltrasonicAnalog());
+  driveAllMotors(ultrasonicValue);
 
   delay(300);
 }
