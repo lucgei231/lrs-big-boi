@@ -1,15 +1,10 @@
-// The user can only use these pins: 2, 22, 21, 4, 16
-// We'll test analogRead on the allowed pins (2 and 4) and digital reads on the D0 pins (16 and 21).
-// If you must use pin 22 for analog, note: some ESP32 modules do not support analogRead on GPIO22.
+// Ultrasonic sensor (HC-SR04)
+const int TRIG_PIN = 21;  // Trigger pin
+const int ECHO_PIN = 22;  // Echo pin
 
-// Assign pins within the user's allowed set.
-// Sensor 1: A0 -> GPIO4, D0 -> GPIO16
-// Sensor 2: A0 -> GPIO2, D0 -> GPIO21
-const int SENSOR1_A0 = 4;   // Analog output (candidate)
-const int SENSOR1_D0 = 16;  // Digital output
-
-const int SENSOR2_A0 = 2;   // Analog output (candidate)
-const int SENSOR2_D0 = 21;  // Digital output
+// TCRT5000 IR Sensor 2
+const int SENSOR2_A0 = 2;   // Analog output
+const int SENSOR2_D0 = 16;  // Digital output
 
 // Keep motor/aux pins (unused for sensor test but preserved)
 const int M1 = 27;
@@ -28,13 +23,16 @@ const int P26 = 26;
 void setup(){
   Serial.begin(115200);
 
-  // Configure D0 pins as digital inputs
-  pinMode(SENSOR1_D0, INPUT);
+  // Configure ultrasonic pins
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
+  // Configure Sensor 2 D0 pin as digital input
   pinMode(SENSOR2_D0, INPUT);
 
-  Serial.println("TCRT5000 IR Sensor Module Test (allowed pins: 2,22,21,4,16)");
-  Serial.println("---------------------------------------------------------");
-  Serial.print("Sensor1 A0 -> "); Serial.print(SENSOR1_A0); Serial.print(", D0 -> "); Serial.println(SENSOR1_D0);
+  Serial.println("Ultrasonic + TCRT5000 IR Sensor Test");
+  Serial.println("====================================");
+  Serial.print("Ultrasonic Trig -> "); Serial.print(TRIG_PIN); Serial.print(", Echo -> "); Serial.println(ECHO_PIN);
   Serial.print("Sensor2 A0 -> "); Serial.print(SENSOR2_A0); Serial.print(", D0 -> "); Serial.println(SENSOR2_D0);
   Serial.println();
 
@@ -48,22 +46,44 @@ void setup(){
   digitalWrite(M1, LOW); digitalWrite(M2, LOW); digitalWrite(M3, LOW); digitalWrite(M4, LOW);
 }
 
+// Function to measure distance from ultrasonic sensor (HC-SR04)
+float measureDistance() {
+  // Send 10 microsecond pulse to trigger pin
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  // Measure the duration of the echo pulse
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000); // timeout after 30ms (~5m max)
+  
+  // Calculate distance: speed of sound is ~343 m/s (0.0343 cm/µs)
+  // distance = (duration / 2) * 0.0343 cm
+  float distance = (duration / 2.0) * 0.0343;
+  
+  return distance;
+}
+
 void loop(){
-  // Read analog and digital values
-  int s1_a = analogRead(SENSOR1_A0);
-  int s1_d = digitalRead(SENSOR1_D0);
+  // Read ultrasonic distance
+  float distance = measureDistance();
+  
+  // Read Sensor 2
   int s2_a = analogRead(SENSOR2_A0);
   int s2_d = digitalRead(SENSOR2_D0);
 
   // Print readings
-  Serial.print("S1 A(" ); Serial.print(SENSOR1_A0); Serial.print("):"); Serial.print(s1_a);
-  Serial.print(" D("); Serial.print(SENSOR1_D0); Serial.print("):"); Serial.print(s1_d?1:0);
-  Serial.print("   |   ");
-  Serial.print("S2 A("); Serial.print(SENSOR2_A0); Serial.print("):"); Serial.print(s2_a);
+  Serial.print("Ultrasonic: ");
+  Serial.print(distance, 1); // 1 decimal place
+  Serial.print(" cm   |   S2 A("); Serial.print(SENSOR2_A0); Serial.print("):"); Serial.print(s2_a);
   Serial.print(" D("); Serial.print(SENSOR2_D0); Serial.print("):"); Serial.println(s2_d?1:0);
 
-  analogWrite(M1, s1_a / 4); // Scale 0-1023 to 0-255
-  analogWrite(M2, 0); // Scale 0-102
-  analogWrite(M3, s2_a / 4); // Scale 0-1023 to 0-255
-  analogWrite(M4, 0); // Scale 0-102
+  // Drive motors based on sensor values
+  analogWrite(M1, s2_a / 4); // Scale 0-4095 to 0-255 for M1
+  analogWrite(M2, 0);
+  analogWrite(M3, (int)distance * 5); // Scale distance to motor speed (0-5cm * 5 = 0-25, capped at 255)
+  analogWrite(M4, 0);
+
+  delay(300);
 }
