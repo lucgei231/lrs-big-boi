@@ -76,6 +76,12 @@ void setup(){
 
 // Function to read ultrasonic sensor via analog input
 int readUltrasonicAnalog() {
+    digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
   long duration = pulseIn(ECHO_PIN, HIGH, 30000); // timeout after 30ms (~5m max)
   
   // Calculate distance: speed of sound is ~343 m/s (0.0343 cm/µs)
