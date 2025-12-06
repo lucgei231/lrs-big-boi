@@ -42,7 +42,7 @@ const int M6_PIN2 = 13;
 
 void setup(){
   Serial.begin(115200);
-
+  
   // Configure ultrasonic pins
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);  // Read ECHO_PIN as analog
@@ -96,7 +96,7 @@ int readUltrasonicAnalog() {
 void driveAllMotors(int speed) {
   // Scale speed to 0-255 range
   //int ultrasonicValue = constrain(speed / 16, 0, 255); // scale from 0-4095 to 0-255
-  
+  int ultrasonicValue = readUltrasonicAnalog();
   // Drive all motors forward
   analogWrite(M1_PIN1, ultrasonicValue); digitalWrite(M1_PIN2, LOW);
   analogWrite(M2_PIN1, ultrasonicValue); digitalWrite(M2_PIN2, LOW);
