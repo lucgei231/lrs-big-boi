@@ -103,8 +103,8 @@ void driveAllMotors(int speed) {
 }
 
 void loop(){
-  // Read ultrasonic distance
-  float distance = measureDistance();
+  // Read ultrasonic sensor analog value
+  int ultrasonicValue = readUltrasonicAnalog();
   
   // Read Sensor 2
   int s2_a = analogRead(SENSOR2_A0);
@@ -112,15 +112,12 @@ void loop(){
 
   // Print readings
   Serial.print("Ultrasonic: ");
-  Serial.print(distance, 1); // 1 decimal place
-  Serial.print(" cm   |   S2 A("); Serial.print(SENSOR2_A0); Serial.print("):"); Serial.print(s2_a);
+  Serial.print(ultrasonicValue);
+  Serial.print("   |   S2 A("); Serial.print(SENSOR2_A0); Serial.print("):"); Serial.print(s2_a);
   Serial.print(" D("); Serial.print(SENSOR2_D0); Serial.print("):"); Serial.println(s2_d?1:0);
 
-  // Drive motors based on sensor values
-  analogWrite(M1, s2_a / 4); // Scale 0-4095 to 0-255 for M1
-  analogWrite(M2, 0);
-  analogWrite(M3, (int)distance * 5); // Scale distance to motor speed (0-5cm * 5 = 0-25, capped at 255)
-  analogWrite(M4, 0);
+  // Drive all 6 motors with ultrasonic sensor value
+  driveAllMotors(ultrasonicValue);
 
   delay(300);
 }
