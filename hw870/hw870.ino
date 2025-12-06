@@ -95,7 +95,7 @@ int readUltrasonicAnalog() {
 // Function to drive all 6 motors with same speed
 void driveAllMotors(int speed) {
   // Scale speed to 0-255 range
-  int ultrasonicValue = constrain(speed / 16, 0, 255); // scale from 0-4095 to 0-255
+  //int ultrasonicValue = constrain(speed / 16, 0, 255); // scale from 0-4095 to 0-255
   
   // Drive all motors forward
   analogWrite(M1_PIN1, ultrasonicValue); digitalWrite(M1_PIN2, LOW);
