@@ -87,8 +87,8 @@ int readUltrasonicAnalog() {
   // Calculate distance: speed of sound is ~343 m/s (0.0343 cm/µs)
   // distance = (duration / 2) * 0.0343 cm
   float distance = (duration / 2.0) * 0.0343;
-  speed = distance;
-  return speed;
+
+  return distance;
 
 }
 
