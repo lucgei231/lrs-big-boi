@@ -5,6 +5,15 @@ const int ECHO_PIN = 22;  // Echo pin
 // TCRT5000 IR Sensor 2
 const int SENSOR2_A0 = 2;   // Analog output
 const int SENSOR2_D0 = 16;  // Digital output
+//m1: d32, d33
+//m2: d25, d26
+
+//m3 d19, d17
+//m4 d18, d23
+
+//m5 d27, d14
+//m6 d12, d13
+
 
 // Keep motor/aux pins (unused for sensor test but preserved)
 const int M1 = 27;
