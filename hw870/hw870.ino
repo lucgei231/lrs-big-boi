@@ -40,6 +40,11 @@ const int M5_PIN2 = 14;
 const int M6_PIN1 = 12;
 const int M6_PIN2 = 13;
 
+// M5 control variables
+unsigned long m5LastSwitchTime = 0;
+const unsigned long M5_INTERVAL = 3000; // 3 seconds
+bool m5Forward = true; // Track direction
+
 void setup(){
   Serial.begin(115200);
   
@@ -102,8 +107,30 @@ void driveAllMotors(int speed) {
   analogWrite(M2_PIN1, ultrasonicValue); digitalWrite(M2_PIN2, LOW);
   analogWrite(M3_PIN1, ultrasonicValue); digitalWrite(M3_PIN2, LOW);
   analogWrite(M4_PIN1, ultrasonicValue); digitalWrite(M4_PIN2, LOW);
-  analogWrite(M5_PIN1, ultrasonicValue); digitalWrite(M5_PIN2, LOW);
   analogWrite(M6_PIN1, ultrasonicValue); digitalWrite(M6_PIN2, LOW);
+}
+
+// Function to alternate M5 direction every 3 seconds
+void alternateM5() {
+  unsigned long currentTime = millis();
+  
+  // Check if 3 seconds have passed
+  if (currentTime - m5LastSwitchTime >= M5_INTERVAL) {
+    m5LastSwitchTime = currentTime;
+    m5Forward = !m5Forward; // Toggle direction
+  }
+  
+  // Drive M5 in current direction
+  int motorSpeed = 200; // Fixed speed for M5
+  if (m5Forward) {
+    // Forward: PIN1 HIGH, PIN2 LOW
+    analogWrite(M5_PIN1, motorSpeed);
+    digitalWrite(M5_PIN2, LOW);
+  } else {
+    // Backward: PIN1 LOW, PIN2 HIGH
+    digitalWrite(M5_PIN1, LOW);
+    analogWrite(M5_PIN2, motorSpeed);
+  }
 }
 
 void loop(){
@@ -118,10 +145,14 @@ void loop(){
   Serial.print("Ultrasonic: ");
   Serial.print(ultrasonicValue);
   Serial.print("   |   S2 A("); Serial.print(SENSOR2_A0); Serial.print("):"); Serial.print(s2_a);
-  Serial.print(" D("); Serial.print(SENSOR2_D0); Serial.print("):"); Serial.println(s2_d?1:0);
+  Serial.print(" D("); Serial.print(SENSOR2_D0); Serial.print("):"); Serial.print(s2_d?1:0);
+  Serial.print("   |   M5: "); Serial.println(m5Forward ? "Forward" : "Backward");
 
-  // Drive all 6 motors with ultrasonic sensor value
+  // Drive all motors (M1-M4, M6) with ultrasonic sensor value
   driveAllMotors(ultrasonicValue);
+  
+  // Alternate M5 direction every 3 seconds
+  alternateM5();
 
   delay(300);
 }
