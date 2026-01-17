@@ -136,19 +136,19 @@ void alternateM5() {
 }
 
 void loop(){
-  
-    analogWrite(M1_PIN1, 250); digitalWrite(M1_PIN2, LOW);
-    analogWrite(M2_PIN1, 250); digitalWrite(M2_PIN2, LOW);
-    analogWrite(M3_PIN1, 250); digitalWrite(M3_PIN2, LOW);
-    analogWrite(M4_PIN1, 250); digitalWrite(M4_PIN2, LOW);
-    analogWrite(M5_PIN1, 250); digitalWrite(M5_PIN2, LOW);
-    analogWrite(M6_PIN1, 250); digitalWrite(M6_PIN2, LOW);
+
+    digitalWrite(M1_PIN1, HIGH); digitalWrite(M1_PIN2, LOW);
+    digitalWrite(M2_PIN1, HIGH); digitalWrite(M2_PIN2, LOW);
+    digitalWrite(M3_PIN1, HIGH); digitalWrite(M3_PIN2, LOW);
+    digitalWrite(M4_PIN1, HIGH); digitalWrite(M4_PIN2, LOW);
+    digitalWrite(M5_PIN1, HIGH); digitalWrite(M5_PIN2, LOW);
+    digitalWrite(M6_PIN1, HIGH); digitalWrite(M6_PIN2, LOW);
     delay(300);
-        digitalWrite(M1_PIN1, LOW); analogWrite(M1_PIN2, 250);
-    digitalWrite(M2_PIN1, LOW); analogWrite(M2_PIN2, 250);
-    digitalWrite(M3_PIN1, LOW); analogWrite(M3_PIN2, 250);
-    digitalWrite(M4_PIN1, LOW); analogWrite(M4_PIN2, 250);
-    digitalWrite(M5_PIN1, LOW); analogWrite(M5_PIN2, 250);
-    digitalWrite(M6_PIN1, LOW); analogWrite(M6_PIN2, 250);
+        digitalWrite(M1_PIN1, LOW); digitalWrite(M1_PIN2, HIGH);
+    digitalWrite(M2_PIN1, LOW); digitalWrite(M2_PIN2, HIGH);
+    digitalWrite(M3_PIN1, LOW); digitalWrite(M3_PIN2, HIGH);
+    digitalWrite(M4_PIN1, LOW); digitalWrite(M4_PIN2, HIGH);
+    digitalWrite(M5_PIN1, LOW); digitalWrite(M5_PIN2, HIGH);
+    digitalWrite(M6_PIN1, LOW); digitalWrite(M6_PIN2, HIGH);
     delay(300);
 }
