@@ -136,18 +136,19 @@ void alternateM5() {
 }
 
 void loop(){
-    analogWrite(M1_PIN1, motorSpeed); digitalWrite(M1_PIN2, LOW);
-    analogWrite(M2_PIN1, motorSpeed); digitalWrite(M2_PIN2, LOW);
-    analogWrite(M3_PIN1, motorSpeed); digitalWrite(M3_PIN2, LOW);
-    analogWrite(M4_PIN1, motorSpeed); digitalWrite(M4_PIN2, LOW);
-    analogWrite(M5_PIN1, motorSpeed); digitalWrite(M5_PIN2, LOW);
-    analogWrite(M6_PIN1, motorSpeed); digitalWrite(M6_PIN2, LOW);
+  
+    analogWrite(M1_PIN1, 250); digitalWrite(M1_PIN2, LOW);
+    analogWrite(M2_PIN1, 250); digitalWrite(M2_PIN2, LOW);
+    analogWrite(M3_PIN1, 250); digitalWrite(M3_PIN2, LOW);
+    analogWrite(M4_PIN1, 250); digitalWrite(M4_PIN2, LOW);
+    analogWrite(M5_PIN1, 250); digitalWrite(M5_PIN2, LOW);
+    analogWrite(M6_PIN1, 250); digitalWrite(M6_PIN2, LOW);
     delay(300);
-        digitalWrite(M1_PIN1, LOW); analogWrite(M1_PIN2, motorSpeed);
-    digitalWrite(M2_PIN1, LOW); analogWrite(M2_PIN2, motorSpeed);
-    digitalWrite(M3_PIN1, LOW); analogWrite(M3_PIN2, motorSpeed);
-    digitalWrite(M4_PIN1, LOW); analogWrite(M4_PIN2, motorSpeed);
-    digitalWrite(M5_PIN1, LOW); analogWrite(M5_PIN2, motorSpeed);
-    digitalWrite(M6_PIN1, LOW); analogWrite(M6_PIN2, motorSpeed);
+        digitalWrite(M1_PIN1, LOW); analogWrite(M1_PIN2, 250);
+    digitalWrite(M2_PIN1, LOW); analogWrite(M2_PIN2, 250);
+    digitalWrite(M3_PIN1, LOW); analogWrite(M3_PIN2, 250);
+    digitalWrite(M4_PIN1, LOW); analogWrite(M4_PIN2, 250);
+    digitalWrite(M5_PIN1, LOW); analogWrite(M5_PIN2, 250);
+    digitalWrite(M6_PIN1, LOW); analogWrite(M6_PIN2, 250);
     delay(300);
 }
