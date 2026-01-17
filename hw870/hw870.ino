@@ -143,7 +143,7 @@ void loop(){
     digitalWrite(M4_PIN1, HIGH); digitalWrite(M4_PIN2, LOW);
     digitalWrite(M5_PIN1, HIGH); digitalWrite(M5_PIN2, LOW);
     digitalWrite(M6_PIN1, HIGH); digitalWrite(M6_PIN2, LOW);
-    delay(300);
+    delay(1000);
         digitalWrite(M1_PIN1, LOW); digitalWrite(M1_PIN2, HIGH);
     digitalWrite(M2_PIN1, LOW); digitalWrite(M2_PIN2, HIGH);
     digitalWrite(M3_PIN1, LOW); digitalWrite(M3_PIN2, HIGH);
