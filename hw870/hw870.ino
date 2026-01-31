@@ -153,9 +153,9 @@ void runMotor(int pin1, int pin2, int motorNum, bool forward, int speed, unsigne
 // Set motor direction without delay (for simultaneous control)
 void setMotor(int pin1, int pin2, bool forward, int speed) {
   if (forward) {
-    analogWrite(pin1, speed); digitalWrite(pin2, LOW);
+    digitalWrite(pin1, HIGH); digitalWrite(pin2, LOW);
   } else {
-    digitalWrite(pin1, LOW); analogWrite(pin2, speed);
+    digitalWrite(pin1, LOW); digitalWrite(pin2, HIGH);
   }
 }
 
@@ -217,7 +217,7 @@ void turnRight(int speed, unsigned long runMs) {
 // // Motor 6 A
 void loop() {
   const int motorSpeed = 200;
-  const unsigned long runTime = 300; // ms per action
+  const unsigned long runTime = 2000; // ms per action
 
   moveForward(motorSpeed, runTime);
   moveBackward(motorSpeed, runTime);
