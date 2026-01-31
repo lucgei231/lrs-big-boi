@@ -26,11 +26,11 @@ const int M2_PIN2 = 26;
 
 // m3: d19, d17
 const int M3_PIN1 = 19;
-const int M3_PIN2 = 17;
+const int M3_PIN2 = 23;
 
 // m4: d18, d23
 const int M4_PIN1 = 18;
-const int M4_PIN2 = 23;
+const int M4_PIN2 = 17;
 
 // m5: d27, d14
 const int M5_PIN1 = 27;
@@ -155,42 +155,42 @@ void loop() {
   const unsigned long runTime = 1000; // ms per direction
   const unsigned long pauseTime = 300; // short pause between runs
 
-  // Motor 1
-  runMotor(M1_PIN1, M1_PIN2, 1, true, motorSpeed, runTime);
-  delay(pauseTime);
-  runMotor(M1_PIN1, M1_PIN2, 1, false, motorSpeed, runTime);
-  delay(pauseTime);
+  // // Motor 1
+  // runMotor(M1_PIN1, M1_PIN2, 1, true, motorSpeed, runTime);
+  // delay(pauseTime);
+  // runMotor(M1_PIN1, M1_PIN2, 1, false, motorSpeed, runTime);
+  // delay(pauseTime);
 
-  // Motor 2
-  runMotor(M2_PIN1, M2_PIN2, 2, true, motorSpeed, runTime);
-  delay(pauseTime);
-  runMotor(M2_PIN1, M2_PIN2, 2, false, motorSpeed, runTime);
-  delay(pauseTime);
+  // // Motor 2
+  // runMotor(M2_PIN1, M2_PIN2, 2, true, motorSpeed, runTime);
+  // delay(pauseTime);
+  // runMotor(M2_PIN1, M2_PIN2, 2, false, motorSpeed, runTime);
+  // delay(pauseTime);
 
-  // Motor 3
+  // // Motor 3
   runMotor(M3_PIN1, M3_PIN2, 3, true, motorSpeed, runTime);
   delay(pauseTime);
   runMotor(M3_PIN1, M3_PIN2, 3, false, motorSpeed, runTime);
   delay(pauseTime);
 
-  // Motor 4
-  runMotor(M4_PIN1, M4_PIN2, 4, true, motorSpeed, runTime);
-  delay(pauseTime);
-  runMotor(M4_PIN1, M4_PIN2, 4, false, motorSpeed, runTime);
-  delay(pauseTime);
+  // Motor 4 E
+  // runMotor(M4_PIN1, M4_PIN2, 4, true, motorSpeed, runTime);
+  // delay(pauseTime);
+  // runMotor(M4_PIN1, M4_PIN2, 4, false, motorSpeed, runTime);
+  // delay(pauseTime);
 
-  // Motor 5
-  runMotor(M5_PIN1, M5_PIN2, 5, true, motorSpeed, runTime);
-  delay(pauseTime);
-  runMotor(M5_PIN1, M5_PIN2, 5, false, motorSpeed, runTime);
-  delay(pauseTime);
+  // Motor 5 B
+  // runMotor(M5_PIN1, M5_PIN2, 5, true, motorSpeed, runTime);
+  // delay(pauseTime);
+  // runMotor(M5_PIN1, M5_PIN2, 5, false, motorSpeed, runTime);
+  // delay(pauseTime);
 
-  // Motor 6
-  runMotor(M6_PIN1, M6_PIN2, 6, true, motorSpeed, runTime);
-  delay(pauseTime);
-  runMotor(M6_PIN1, M6_PIN2, 6, false, motorSpeed, runTime);
-  delay(pauseTime);
+  // // Motor 6 A
+  // runMotor(M6_PIN1, M6_PIN2, 6, true, motorSpeed, runTime);
+  // delay(pauseTime);
+  // runMotor(M6_PIN1, M6_PIN2, 6, false, motorSpeed, runTime);
+  // delay(pauseTime);
 
-  Serial.println("Cycle complete.");
-  delay(2000);
+  // Serial.println("Cycle complete.");
+  // delay(2000);
 }
