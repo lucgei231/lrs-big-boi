@@ -192,8 +192,9 @@ void moveBackward(int speed, unsigned long runMs) {
 
 void turnLeft(int speed, unsigned long runMs) {
   Serial.println("Action: turnLeft -> M6 forward, M5 backward, M3 forward, M4 backward");
-  setMotor(M6_PIN1, M6_PIN2, true, speed);
   setMotor(M5_PIN1, M5_PIN2, false, speed);
+  setMotor(M6_PIN1, M6_PIN2, true, speed);
+  
   setMotor(M3_PIN1, M3_PIN2, true, speed);
   setMotor(M4_PIN1, M4_PIN2, false, speed);
   delay(runMs);
@@ -203,8 +204,10 @@ void turnLeft(int speed, unsigned long runMs) {
 
 void turnRight(int speed, unsigned long runMs) {
   Serial.println("Action: turnRight -> opposite of turnLeft");
-  setMotor(M6_PIN1, M6_PIN2, false, speed);
-  setMotor(M5_PIN1, M5_PIN2, true, speed);
+  
+  setMotor(M6_PIN1, M6_PIN2, true, speed);
+  setMotor(M5_PIN1, M5_PIN2, false, speed);
+  
   setMotor(M3_PIN1, M3_PIN2, false, speed);
   setMotor(M4_PIN1, M4_PIN2, true, speed);
   delay(runMs);
