@@ -33,8 +33,8 @@ const int M4_PIN1 = 18;
 const int M4_PIN2 = 17;
 
 // m5: d27, d14
-const int M5_PIN1 = 27;
-const int M5_PIN2 = 14;
+const int M5_PIN1 = 14;
+const int M5_PIN2 = 27;
 
 // m6: d12, d13
 const int M6_PIN1 = 12;
