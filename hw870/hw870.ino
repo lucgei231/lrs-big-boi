@@ -135,24 +135,62 @@ void alternateM5() {
   // Direction alternation is now handled in driveAllMotors()
 }
 
-void loop(){
+// Helper: run a single motor in the requested direction and print status
+void runMotor(int pin1, int pin2, int motorNum, bool forward, int speed, unsigned long runMs) {
+  if (forward) {
+    Serial.print("Motor "); Serial.print(motorNum); Serial.println(" -> Forward");
+    analogWrite(pin1, speed); digitalWrite(pin2, LOW);
+  } else {
+    Serial.print("Motor "); Serial.print(motorNum); Serial.println(" -> Backward");
+    digitalWrite(pin1, LOW); analogWrite(pin2, speed);
+  }
+  delay(runMs);
+  // Stop motor
+  digitalWrite(pin1, LOW); digitalWrite(pin2, LOW);
+  delay(200); // short pause after stopping
+}
 
-    digitalWrite(M1_PIN1, HIGH); digitalWrite(M1_PIN2, LOW);
-    digitalWrite(M2_PIN1, HIGH); digitalWrite(M2_PIN2, LOW);
-    digitalWrite(M3_PIN1, HIGH); digitalWrite(M3_PIN2, LOW);
-    digitalWrite(M4_PIN1, HIGH); digitalWrite(M4_PIN2, LOW);
-    digitalWrite(M5_PIN1, HIGH); digitalWrite(M5_PIN2, LOW);
-    digitalWrite(M6_PIN1, HIGH); digitalWrite(M6_PIN2, LOW);
-    delay(500);
-    digitalWrite(M1_PIN1, LOW); digitalWrite(M1_PIN2, LOW);
-    delay(1000);
-    digitalWrite(M1_PIN1, LOW); digitalWrite(M1_PIN2, HIGH);    
-    digitalWrite(M2_PIN1, LOW); digitalWrite(M2_PIN2, HIGH);
-    digitalWrite(M3_PIN1, LOW); digitalWrite(M3_PIN2, HIGH);
-    digitalWrite(M4_PIN1, LOW); digitalWrite(M4_PIN2, HIGH);
-    digitalWrite(M5_PIN1, LOW); digitalWrite(M5_PIN2, HIGH);
-    digitalWrite(M6_PIN1, LOW); digitalWrite(M6_PIN2, HIGH);
-    delay(500);
-    digitalWrite(M1_PIN1, LOW); digitalWrite(M1_PIN2, LOW);
-    delay(1000);
+void loop() {
+  const int motorSpeed = 200;
+  const unsigned long runTime = 1000; // ms per direction
+  const unsigned long pauseTime = 300; // short pause between runs
+
+  // Motor 1
+  runMotor(M1_PIN1, M1_PIN2, 1, true, motorSpeed, runTime);
+  delay(pauseTime);
+  runMotor(M1_PIN1, M1_PIN2, 1, false, motorSpeed, runTime);
+  delay(pauseTime);
+
+  // Motor 2
+  runMotor(M2_PIN1, M2_PIN2, 2, true, motorSpeed, runTime);
+  delay(pauseTime);
+  runMotor(M2_PIN1, M2_PIN2, 2, false, motorSpeed, runTime);
+  delay(pauseTime);
+
+  // Motor 3
+  runMotor(M3_PIN1, M3_PIN2, 3, true, motorSpeed, runTime);
+  delay(pauseTime);
+  runMotor(M3_PIN1, M3_PIN2, 3, false, motorSpeed, runTime);
+  delay(pauseTime);
+
+  // Motor 4
+  runMotor(M4_PIN1, M4_PIN2, 4, true, motorSpeed, runTime);
+  delay(pauseTime);
+  runMotor(M4_PIN1, M4_PIN2, 4, false, motorSpeed, runTime);
+  delay(pauseTime);
+
+  // Motor 5
+  runMotor(M5_PIN1, M5_PIN2, 5, true, motorSpeed, runTime);
+  delay(pauseTime);
+  runMotor(M5_PIN1, M5_PIN2, 5, false, motorSpeed, runTime);
+  delay(pauseTime);
+
+  // Motor 6
+  runMotor(M6_PIN1, M6_PIN2, 6, true, motorSpeed, runTime);
+  delay(pauseTime);
+  runMotor(M6_PIN1, M6_PIN2, 6, false, motorSpeed, runTime);
+  delay(pauseTime);
+
+  Serial.println("Cycle complete.");
+  delay(2000);
 }
