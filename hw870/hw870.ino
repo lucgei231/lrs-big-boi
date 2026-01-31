@@ -139,10 +139,10 @@ void alternateM5() {
 void runMotor(int pin1, int pin2, int motorNum, bool forward, int speed, unsigned long runMs) {
   if (forward) {
     Serial.print("Motor "); Serial.print(motorNum); Serial.println(" -> Forward");
-    analogWrite(pin1, speed); digitalWrite(pin2, LOW);
+    digitalWrite(pin1, HIGH); digitalWrite(pin2, LOW);
   } else {
     Serial.print("Motor "); Serial.print(motorNum); Serial.println(" -> Backward");
-    digitalWrite(pin1, LOW); analogWrite(pin2, speed);
+    digitalWrite(pin1, LOW); digitalWrite(pin2, HIGH);
   }
   delay(runMs);
   // Stop motor
