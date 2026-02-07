@@ -1,0 +1,48 @@
+name: Compile Arduino Sketch
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  compile:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Arduino CLI
+        uses: arduino/setup-arduino-cli@v1
+
+      - name: Update Arduino CLI core index
+        run: arduino-cli core update-index
+        shell: pwsh
+
+      - name: Install ESP32 board package
+        run: |
+          arduino-cli core install "esp32:esp32" --additional-urls "https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json"
+        shell: pwsh
+
+      - name: Compile hw870.ino
+        run: |
+          arduino-cli compile --fqbn "esp32:esp32:esp32" "hw870/hw870.ino"
+        shell: pwsh
+
+      - name: List compiled artifacts
+        run: |
+          if (Test-Path -Path "hw870/build") {
+            Get-ChildItem -Path hw870/build -Recurse -Include *.bin,*.elf,*.hex -ErrorAction SilentlyContinue | Select-Object -First 50 | ForEach-Object { Write-Output $_.FullName }
+          } else {
+            Write-Output "No build directory found."
+          }
+        shell: pwsh
+
+      - name: Upload compiled artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hw870-compiled
+          path: hw870/build/**
+          retention-days: 30
