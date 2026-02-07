@@ -195,8 +195,8 @@ void turnLeft(int speed, unsigned long runMs) {
   setMotor(M5_PIN1, M5_PIN2, false, speed);
   setMotor(M6_PIN1, M6_PIN2, true, speed);
   
-  setMotor(M3_PIN1, M3_PIN2, true, speed);
-  setMotor(M4_PIN1, M4_PIN2, false, speed);
+  
+  setMotor(M4_PIN1, M4_PIN2, false, speed);setMotor(M3_PIN1, M3_PIN2, true, speed);
   delay(runMs);
   stopAllMotors();
   delay(150);
@@ -207,9 +207,10 @@ void turnRight(int speed, unsigned long runMs) {
   
   setMotor(M6_PIN1, M6_PIN2, true, speed);
   setMotor(M5_PIN1, M5_PIN2, false, speed);
-  
-  setMotor(M3_PIN1, M3_PIN2, false, speed);
+
   setMotor(M4_PIN1, M4_PIN2, true, speed);
+  setMotor(M3_PIN1, M3_PIN2, false, speed);
+  
   delay(runMs);
   stopAllMotors();
   delay(150);
