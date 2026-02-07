@@ -55,7 +55,7 @@ if errorlevel 1 (
 )
 
 echo Compiling %SKETCH% with FQBN %FQBN%...
-arduino-cli compile --fqbn "%FQBN%" "%SKETCH%"
+arduino-cli compile --fqbn "%FQBN%" "%SKETCH%" --build-path ./build
 if errorlevel 1 (
   echo compile failed
   pause

@@ -1,0 +1,60 @@
+[
+  {
+    "added_include_path": "C:\\Users\\Student\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.6\\cores\\esp32"
+  },
+  {
+    "added_include_path": "C:\\Users\\Student\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.6\\variants\\esp32"
+  },
+  {
+    "compile": {
+      "source_path": "C:\\Users\\Student\\Desktop\\Lucas\\build\\sketch\\hw870.ino.cpp",
+      "object_path": "C:\\Users\\Student\\Desktop\\Lucas\\build\\sketch\\hw870.ino.cpp.o",
+      "depfile_path": "C:\\Users\\Student\\Desktop\\Lucas\\build\\sketch\\hw870.ino.cpp.d"
+    },
+    "compile_task": {
+      "args": [
+        "C:\\Users\\Student\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\esp-x32\\2511/bin/xtensa-esp32-elf-g++",
+        "-c",
+        "@C:\\Users\\Student\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\esp32-libs\\3.3.6/flags/cpp_flags",
+        "-w",
+        "-Os",
+        "-Werror=return-type",
+        "-w",
+        "-x",
+        "c++",
+        "-E",
+        "-CC",
+        "-DF_CPU=240000000L",
+        "-DARDUINO=10607",
+        "-DARDUINO_ESP32_DEV",
+        "-DARDUINO_ARCH_ESP32",
+        "-DARDUINO_BOARD=\"ESP32_DEV\"",
+        "-DARDUINO_VARIANT=\"esp32\"",
+        "-DARDUINO_PARTITION_default",
+        "-DARDUINO_HOST_OS=\"windows\"",
+        "-DARDUINO_FQBN=\"esp32:esp32:esp32\"",
+        "-DESP32=ESP32",
+        "-DCORE_DEBUG_LEVEL=0",
+        "-DARDUINO_RUNNING_CORE=1",
+        "-DARDUINO_EVENT_RUNNING_CORE=1",
+        "-DARDUINO_USB_CDC_ON_BOOT=0",
+        "@C:\\Users\\Student\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\esp32-libs\\3.3.6/flags/defines",
+        "-IC:\\Users\\Student\\Desktop\\Lucas\\hw870",
+        "-iprefix",
+        "C:\\Users\\Student\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\esp32-libs\\3.3.6/include/",
+        "@C:\\Users\\Student\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\esp32-libs\\3.3.6/flags/includes",
+        "-IC:\\Users\\Student\\AppData\\Local\\Arduino15\\packages\\esp32\\tools\\esp32-libs\\3.3.6/qio_qspi/include",
+        "-IC:\\Users\\Student\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.6\\cores\\esp32",
+        "-IC:\\Users\\Student\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.6\\variants\\esp32",
+        "@C:\\Users\\Student\\Desktop\\Lucas\\build/build_opt.h",
+        "@C:\\Users\\Student\\Desktop\\Lucas\\build/file_opts",
+        "C:\\Users\\Student\\Desktop\\Lucas\\build\\sketch\\hw870.ino.cpp",
+        "-o",
+        "nul"
+      ]
+    }
+  },
+  {
+    "missing_include_h": ""
+  }
+]

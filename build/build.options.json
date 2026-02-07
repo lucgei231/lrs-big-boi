@@ -1,0 +1,9 @@
+{
+  "additionalFiles": "",
+  "compiler.optimization_flags": "-Os",
+  "customBuildProperties": "",
+  "fqbn": "esp32:esp32:esp32",
+  "hardwareFolders": "C:\\Users\\Student\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.6,C:\\Users\\Student\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.6",
+  "otherLibrariesFolders": "C:\\Users\\Student\\Documents\\Arduino\\libraries",
+  "sketchLocation": "C:\\Users\\Student\\Desktop\\Lucas\\hw870"
+}
