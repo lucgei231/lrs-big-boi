@@ -28,7 +28,7 @@ jobs:
 
       - name: Compile hw870.ino
         run: |
-          arduino-cli compile --fqbn "esp32:esp32:esp32" "hw870/hw870.ino"
+          arduino-cli compile --fqbn "esp32:esp32:esp32" "hw870/hw870.ino" --build-path "hw870/build" --output-dir "hw870/build"
         shell: pwsh
 
       - name: List compiled artifacts
