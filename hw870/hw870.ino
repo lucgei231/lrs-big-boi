@@ -9,7 +9,39 @@ const char* WIFI_PASS = "OpeningRedHeadphone8";
 
 WebServer server(80);
 
-// forward declarations for motor control functions used in web handlers
+const int TRIG_PIN = 21;  // Trigger pin
+const int ECHO_PIN = 22;  // Echo pin (will read analog)
+
+// TCRT5000 IR Sensor 2
+const int SENSOR2_A0 = 2;   // Analog output
+const int SENSOR2_D0 = 16;  // Digital output
+
+// Motor pin assignments (from user comments)
+// m1: d32, d33
+const int M1_PIN1 = 32;
+const int M1_PIN2 = 33;
+
+// m2: d25, d26
+const int M2_PIN1 = 25;
+const int M2_PIN2 = 26;
+
+// m3: d19, d17
+const int M3_PIN1 = 19;
+const int M3_PIN2 = 23;
+
+// m4: d18, d23
+const int M4_PIN1 = 18;
+const int M4_PIN2 = 17;
+
+// m5: d27, d14
+const int M5_PIN1 = 14;
+const int M5_PIN2 = 27;
+
+// m6: d12, d13
+const int M6_PIN1 = 12;
+const int M6_PIN2 = 13;
+
+// forward declarations for motor control functions
 void setMotor(int pin1, int pin2, bool forward, int speed);
 void stopAllMotors();
 void moveForward(int speed, unsigned long runMs);
@@ -17,8 +49,6 @@ void moveBackward(int speed, unsigned long runMs);
 void turnLeft(int speed, unsigned long runMs);
 void turnRight(int speed, unsigned long runMs);
 void runMotor(int pin1, int pin2, int motorNum, bool forward, int speed, unsigned long runMs);
-void setAllMotors(bool forward, int speed);
-String htmlPage();
 
 // helper sets all motors to same direction/speed
 void setAllMotors(bool forward, int speed) {
@@ -49,47 +79,6 @@ String htmlPage() {
 </body></html>
 )rawliteral";
 }
-
-const int TRIG_PIN = 21;  // Trigger pin
-const int ECHO_PIN = 22;  // Echo pin (will read analog)
-
-// TCRT5000 IR Sensor 2
-const int SENSOR2_A0 = 2;   // Analog output
-const int SENSOR2_D0 = 16;  // Digital output
-//m1: d32, d33
-//m2: d25, d26
-
-//m3 d19, d17
-//m4 d18, d23
-
-//m5 d27, d14
-//m6 d12, d13
-
-
-// Motor pin assignments (from user comments)
-// m1: d32, d33
-const int M1_PIN1 = 32;
-const int M1_PIN2 = 33;
-
-// m2: d25, d26
-const int M2_PIN1 = 25;
-const int M2_PIN2 = 26;
-
-// m3: d19, d17
-const int M3_PIN1 = 19;
-const int M3_PIN2 = 23;
-
-// m4: d18, d23
-const int M4_PIN1 = 18;
-const int M4_PIN2 = 17;
-
-// m5: d27, d14
-const int M5_PIN1 = 14;
-const int M5_PIN2 = 27;
-
-// m6: d12, d13
-const int M6_PIN1 = 12;
-const int M6_PIN2 = 13;
 
 // M5 control variables
 unsigned long m5LastSwitchTime = 0;
