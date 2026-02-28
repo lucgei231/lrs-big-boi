@@ -9,7 +9,18 @@ const char* WIFI_PASS = "OpeningRedHeadphone8";
 
 WebServer server(80);
 
-// Helper to set all motors at once
+// forward declarations for motor control functions used in web handlers
+void setMotor(int pin1, int pin2, bool forward, int speed);
+void stopAllMotors();
+void moveForward(int speed, unsigned long runMs);
+void moveBackward(int speed, unsigned long runMs);
+void turnLeft(int speed, unsigned long runMs);
+void turnRight(int speed, unsigned long runMs);
+void runMotor(int pin1, int pin2, int motorNum, bool forward, int speed, unsigned long runMs);
+void setAllMotors(bool forward, int speed);
+String htmlPage();
+
+// helper sets all motors to same direction/speed
 void setAllMotors(bool forward, int speed) {
   setMotor(M1_PIN1, M1_PIN2, forward, speed);
   setMotor(M2_PIN1, M2_PIN2, forward, speed);
@@ -19,20 +30,26 @@ void setAllMotors(bool forward, int speed) {
   setMotor(M6_PIN1, M6_PIN2, forward, speed);
 }
 
+// HTML for web interface
 String htmlPage() {
-  String html = "<!doctype html><html><head><meta name=viewport content=width=device-width,initial-scale=1">";
-  html += "<title>Lucas Control</title><style>button{width:140px;height:50px;margin:6px;font-size:16px}</style></head><body>";
-  html += "<h3>Lucas Motor Control</h3>";
-  html += "<div><button onclick=location.href='/all/forward'>All Forward</button><button onclick=location.href='/all/backward'>All Back</button><button onclick=location.href='/all/stop'>All Stop</button></div>";
-  html += "<div><button onclick=location.href='/forward'>Forward</button><button onclick=location.href='/backward'>Backward</button><button onclick=location.href='/left'>Left</button><button onclick=location.href='/right'>Right</button><button onclick=location.href='/stop'>Stop</button></div>";
-  html += "<h4>Individual Motors</h4>";
-  for (int i=1;i<=6;i++){
-    html += "<div> M" + String(i) + " <button onclick=location.href='/m"+String(i)+"/forward'>F</button> <button onclick=location.href='/m"+String(i)+"/backward'>B</button></div>";
-  }
-  html += "<p>mDNS: <b>lucas.local</b></p>";
-  html += "</body></html>";
-  return html;
+  return R"rawliteral(
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lucas Control</title><style>button{width:140px;height:50px;margin:6px;font-size:16px}</style></head><body>
+<h3>Lucas Motor Control</h3>
+<div><button onclick=location.href='/all/forward'>All Forward</button><button onclick=location.href='/all/backward'>All Back</button><button onclick=location.href='/all/stop'>All Stop</button></div>
+<div><button onclick=location.href='/forward'>Forward</button><button onclick=location.href='/backward'>Backward</button><button onclick=location.href='/left'>Left</button><button onclick=location.href='/right'>Right</button><button onclick=location.href='/stop'>Stop</button></div>
+<h4>Individual Motors</h4>
+<div> M1 <button onclick=location.href='/m1/forward'>F</button> <button onclick=location.href='/m1/backward'>B</button></div>
+<div> M2 <button onclick=location.href='/m2/forward'>F</button> <button onclick=location.href='/m2/backward'>B</button></div>
+<div> M3 <button onclick=location.href='/m3/forward'>F</button> <button onclick=location.href='/m3/backward'>B</button></div>
+<div> M4 <button onclick=location.href='/m4/forward'>F</button> <button onclick=location.href='/m4/backward'>B</button></div>
+<div> M5 <button onclick=location.href='/m5/forward'>F</button> <button onclick=location.href='/m5/backward'>B</button></div>
+<div> M6 <button onclick=location.href='/m6/forward'>F</button> <button onclick=location.href='/m6/backward'>B</button></div>
+<p>mDNS: <b>lucas.local</b></p>
+</body></html>
+)rawliteral";
 }
+
 const int TRIG_PIN = 21;  // Trigger pin
 const int ECHO_PIN = 22;  // Echo pin (will read analog)
 
