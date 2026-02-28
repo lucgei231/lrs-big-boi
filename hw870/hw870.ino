@@ -1,4 +1,38 @@
 // Ultrasonic sensor (HC-SR04) - using analog read on echo pin
+#include <WiFi.h>
+#include <WebServer.h>
+#include <ESPmDNS.h>
+
+// WiFi credentials (user requested)
+const char* WIFI_SSID = "Events & Hires";
+const char* WIFI_PASS = "OpeningRedHeadphone8";
+
+WebServer server(80);
+
+// Helper to set all motors at once
+void setAllMotors(bool forward, int speed) {
+  setMotor(M1_PIN1, M1_PIN2, forward, speed);
+  setMotor(M2_PIN1, M2_PIN2, forward, speed);
+  setMotor(M3_PIN1, M3_PIN2, forward, speed);
+  setMotor(M4_PIN1, M4_PIN2, forward, speed);
+  setMotor(M5_PIN1, M5_PIN2, forward, speed);
+  setMotor(M6_PIN1, M6_PIN2, forward, speed);
+}
+
+String htmlPage() {
+  String html = "<!doctype html><html><head><meta name=viewport content=width=device-width,initial-scale=1">";
+  html += "<title>Lucas Control</title><style>button{width:140px;height:50px;margin:6px;font-size:16px}</style></head><body>";
+  html += "<h3>Lucas Motor Control</h3>";
+  html += "<div><button onclick=location.href='/all/forward'>All Forward</button><button onclick=location.href='/all/backward'>All Back</button><button onclick=location.href='/all/stop'>All Stop</button></div>";
+  html += "<div><button onclick=location.href='/forward'>Forward</button><button onclick=location.href='/backward'>Backward</button><button onclick=location.href='/left'>Left</button><button onclick=location.href='/right'>Right</button><button onclick=location.href='/stop'>Stop</button></div>";
+  html += "<h4>Individual Motors</h4>";
+  for (int i=1;i<=6;i++){
+    html += "<div> M" + String(i) + " <button onclick=location.href='/m"+String(i)+"/forward'>F</button> <button onclick=location.href='/m"+String(i)+"/backward'>B</button></div>";
+  }
+  html += "<p>mDNS: <b>lucas.local</b></p>";
+  html += "</body></html>";
+  return html;
+}
 const int TRIG_PIN = 21;  // Trigger pin
 const int ECHO_PIN = 22;  // Echo pin (will read analog)
 
@@ -77,6 +111,75 @@ void setup(){
   digitalWrite(M4_PIN1, LOW); digitalWrite(M4_PIN2, LOW);
   digitalWrite(M5_PIN1, LOW); digitalWrite(M5_PIN2, LOW);
   digitalWrite(M6_PIN1, LOW); digitalWrite(M6_PIN2, LOW);
+
+  // Connect to WiFi
+  Serial.print("Connecting to WiFi: "); Serial.println(WIFI_SSID);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  unsigned long start = millis();
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print('.');
+    if (millis() - start > 20000) break; // timeout 20s
+  }
+  Serial.println();
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("WiFi connected, IP: "); Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("WiFi connect failed or timed out");
+  }
+
+  // Start mDNS
+  if (MDNS.begin("lucas")) {
+    MDNS.addService("http", "tcp", 80);
+    Serial.println("mDNS responder started as lucas.local");
+  } else {
+    Serial.println("Failed to start mDNS");
+  }
+
+  // Web server endpoints
+  server.on("/", [](){ server.send(200, "text/html", htmlPage()); });
+  server.on("/all/forward", [](){ setAllMotors(true, 200); server.send(200,"text/plain","OK"); });
+  server.on("/all/backward", [](){ setAllMotors(false, 200); server.send(200,"text/plain","OK"); });
+  server.on("/all/stop", [](){ stopAllMotors(); server.send(200,"text/plain","OK"); });
+
+  server.on("/forward", [](){ moveForward(200,2000); server.send(200,"text/plain","OK"); });
+  server.on("/backward", [](){ moveBackward(200,2000); server.send(200,"text/plain","OK"); });
+  server.on("/left", [](){ turnLeft(200,2000); server.send(200,"text/plain","OK"); });
+  server.on("/right", [](){ turnRight(200,2000); server.send(200,"text/plain","OK"); });
+  server.on("/stop", [](){ stopAllMotors(); server.send(200,"text/plain","OK"); });
+
+  // Individual motor endpoints
+  server.onNotFound([](){
+    String uri = server.uri();
+    // support /mX/forward and /mX/backward
+    for (int i=1;i<=6;i++){
+      String fwd = "/m" + String(i) + "/forward";
+      String bwd = "/m" + String(i) + "/backward";
+      if (uri == fwd) {
+        // map motor i to pins
+        if (i==1) runMotor(M1_PIN1,M1_PIN2,i,true,200,2000);
+        if (i==2) runMotor(M2_PIN1,M2_PIN2,i,true,200,2000);
+        if (i==3) runMotor(M3_PIN1,M3_PIN2,i,true,200,2000);
+        if (i==4) runMotor(M4_PIN1,M4_PIN2,i,true,200,2000);
+        if (i==5) runMotor(M5_PIN1,M5_PIN2,i,true,200,2000);
+        if (i==6) runMotor(M6_PIN1,M6_PIN2,i,true,200,2000);
+        server.send(200,"text/plain","OK"); return;
+      }
+      if (uri == bwd) {
+        if (i==1) runMotor(M1_PIN1,M1_PIN2,i,false,200,2000);
+        if (i==2) runMotor(M2_PIN1,M2_PIN2,i,false,200,2000);
+        if (i==3) runMotor(M3_PIN1,M3_PIN2,i,false,200,2000);
+        if (i==4) runMotor(M4_PIN1,M4_PIN2,i,false,200,2000);
+        if (i==5) runMotor(M5_PIN1,M5_PIN2,i,false,200,2000);
+        if (i==6) runMotor(M6_PIN1,M6_PIN2,i,false,200,2000);
+        server.send(200,"text/plain","OK"); return;
+      }
+    }
+    server.send(404, "text/plain", "Not found");
+  });
+
+  server.begin();
+  Serial.println("HTTP server started");
 }
 
 // Function to read ultrasonic sensor via analog input
@@ -220,14 +323,6 @@ void turnRight(int speed, unsigned long runMs) {
 // Motor 5 B
 // // Motor 6 A
 void loop() {
-  const int motorSpeed = 200;
-  const unsigned long runTime = 2000; // ms per action
-
-  moveForward(motorSpeed, runTime);
-  moveBackward(motorSpeed, runTime);
-  turnLeft(motorSpeed, runTime);
-  turnRight(motorSpeed, runTime);
-
-  Serial.println("Cycle complete.");
-  delay(1000);
+  server.handleClient();
+  delay(10);
 }
