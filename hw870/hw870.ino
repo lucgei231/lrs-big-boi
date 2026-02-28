@@ -4,8 +4,8 @@
 #include <ESPmDNS.h>
 
 // WiFi credentials (user requested)
-const char* WIFI_SSID = "Events & Hires";
-const char* WIFI_PASS = "OpeningRedHeadphone8";
+const char* WIFI_SSID = "potato";
+const char* WIFI_PASS = "potato123s";
 
 WebServer server(80);
 
