@@ -5,7 +5,7 @@
 
 // WiFi credentials (user requested)
 const char* WIFI_SSID = "potato";
-const char* WIFI_PASS = "potato123s";
+const char* WIFI_PASS = "potato123";
 
 WebServer server(80);
 
