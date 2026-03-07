@@ -85,6 +85,17 @@ unsigned long m5LastSwitchTime = 0;
 const unsigned long M5_INTERVAL = 3000; // 3 seconds
 bool m5Forward = true; // Track direction for all motors
 
+// Non-blocking motor timing variables
+struct MotorState {
+  bool active = false;
+  unsigned long startTime = 0;
+  unsigned long duration = 0;
+  int pin1 = 0, pin2 = 0;
+  bool forward = false;
+  int speed = 0;
+};
+MotorState currentMotor = {false, 0, 0, 0, 0, false, 0};
+
 void setup(){
   Serial.begin(115200);
   
@@ -144,15 +155,15 @@ void setup(){
 
   // Web server endpoints
   server.on("/", [](){ server.send(200, "text/html", htmlPage()); });
-  server.on("/all/forward", [](){ setAllMotors(true, 200); server.send(200,"text/plain","OK"); });
-  server.on("/all/backward", [](){ setAllMotors(false, 200); server.send(200,"text/plain","OK"); });
-  server.on("/all/stop", [](){ stopAllMotors(); server.send(200,"text/plain","OK"); });
+  server.on("/all/forward", [](){ setAllMotors(true, 200); server.sendHeader("Location","/"); server.send(302,"text/plain",""); });
+  server.on("/all/backward", [](){ setAllMotors(false, 200); server.sendHeader("Location","/"); server.send(302,"text/plain",""); });
+  server.on("/all/stop", [](){ stopAllMotors(); server.sendHeader("Location","/"); server.send(302,"text/plain",""); });
 
-  server.on("/forward", [](){ moveForward(200,2000); server.send(200,"text/plain","OK"); });
-  server.on("/backward", [](){ moveBackward(200,2000); server.send(200,"text/plain","OK"); });
-  server.on("/left", [](){ turnLeft(200,2000); server.send(200,"text/plain","OK"); });
-  server.on("/right", [](){ turnRight(200,2000); server.send(200,"text/plain","OK"); });
-  server.on("/stop", [](){ stopAllMotors(); server.send(200,"text/plain","OK"); });
+  server.on("/forward", [](){ scheduleMotorSequence(M4_PIN1, M4_PIN2, M5_PIN1, M5_PIN2, M6_PIN1, M6_PIN2, M3_PIN1, M3_PIN2, true, 200, 2000); server.sendHeader("Location","/"); server.send(302,"text/plain",""); });
+  server.on("/backward", [](){ scheduleMotorSequence(M4_PIN1, M4_PIN2, M5_PIN1, M5_PIN2, M6_PIN1, M6_PIN2, M3_PIN1, M3_PIN2, false, 200, 2000); server.sendHeader("Location","/"); server.send(302,"text/plain",""); });
+  server.on("/left", [](){ turnLeftNonBlocking(200, 2000); server.sendHeader("Location","/"); server.send(302,"text/plain",""); });
+  server.on("/right", [](){ turnRightNonBlocking(200, 2000); server.sendHeader("Location","/"); server.send(302,"text/plain",""); });
+  server.on("/stop", [](){ stopAllMotors(); server.sendHeader("Location","/"); server.send(302,"text/plain",""); });
 
   // Individual motor endpoints
   server.onNotFound([](){
@@ -163,22 +174,22 @@ void setup(){
       String bwd = "/m" + String(i) + "/backward";
       if (uri == fwd) {
         // map motor i to pins
-        if (i==1) runMotor(M1_PIN1,M1_PIN2,i,true,200,2000);
-        if (i==2) runMotor(M2_PIN1,M2_PIN2,i,true,200,2000);
-        if (i==3) runMotor(M3_PIN1,M3_PIN2,i,true,200,2000);
-        if (i==4) runMotor(M4_PIN1,M4_PIN2,i,true,200,2000);
-        if (i==5) runMotor(M5_PIN1,M5_PIN2,i,true,200,2000);
-        if (i==6) runMotor(M6_PIN1,M6_PIN2,i,true,200,2000);
-        server.send(200,"text/plain","OK"); return;
+        if (i==1) scheduleMotor(M1_PIN1,M1_PIN2,i,true,200,2000);
+        if (i==2) scheduleMotor(M2_PIN1,M2_PIN2,i,true,200,2000);
+        if (i==3) scheduleMotor(M3_PIN1,M3_PIN2,i,true,200,2000);
+        if (i==4) scheduleMotor(M4_PIN1,M4_PIN2,i,true,200,2000);
+        if (i==5) scheduleMotor(M5_PIN1,M5_PIN2,i,true,200,2000);
+        if (i==6) scheduleMotor(M6_PIN1,M6_PIN2,i,true,200,2000);
+        server.sendHeader("Location","/"); server.send(302,"text/plain",""); return;
       }
       if (uri == bwd) {
-        if (i==1) runMotor(M1_PIN1,M1_PIN2,i,false,200,2000);
-        if (i==2) runMotor(M2_PIN1,M2_PIN2,i,false,200,2000);
-        if (i==3) runMotor(M3_PIN1,M3_PIN2,i,false,200,2000);
-        if (i==4) runMotor(M4_PIN1,M4_PIN2,i,false,200,2000);
-        if (i==5) runMotor(M5_PIN1,M5_PIN2,i,false,200,2000);
-        if (i==6) runMotor(M6_PIN1,M6_PIN2,i,false,200,2000);
-        server.send(200,"text/plain","OK"); return;
+        if (i==1) scheduleMotor(M1_PIN1,M1_PIN2,i,false,200,2000);
+        if (i==2) scheduleMotor(M2_PIN1,M2_PIN2,i,false,200,2000);
+        if (i==3) scheduleMotor(M3_PIN1,M3_PIN2,i,false,200,2000);
+        if (i==4) scheduleMotor(M4_PIN1,M4_PIN2,i,false,200,2000);
+        if (i==5) scheduleMotor(M5_PIN1,M5_PIN2,i,false,200,2000);
+        if (i==6) scheduleMotor(M6_PIN1,M6_PIN2,i,false,200,2000);
+        server.sendHeader("Location","/"); server.send(302,"text/plain",""); return;
       }
     }
     server.send(404, "text/plain", "Not found");
@@ -244,21 +255,6 @@ void alternateM5() {
   // Direction alternation is now handled in driveAllMotors()
 }
 
-// Helper: run a single motor in the requested direction and print status
-void runMotor(int pin1, int pin2, int motorNum, bool forward, int speed, unsigned long runMs) {
-  if (forward) {
-    Serial.print("Motor "); Serial.print(motorNum); Serial.println(" -> Forward");
-    analogWrite(pin1, speed); digitalWrite(pin2, LOW);
-  } else {
-    Serial.print("Motor "); Serial.print(motorNum); Serial.println(" -> Backward");
-    digitalWrite(pin1, LOW); analogWrite(pin2, speed);
-  }
-  delay(runMs);
-  // Stop motor
-  digitalWrite(pin1, LOW); digitalWrite(pin2, LOW);
-  delay(200); // short pause after stopping
-}
-
 // Set motor direction without delay (for simultaneous control)
 void setMotor(int pin1, int pin2, bool forward, int speed) {
   if (forward) {
@@ -277,15 +273,54 @@ void stopAllMotors() {
   digitalWrite(M6_PIN1, LOW); digitalWrite(M6_PIN2, LOW);
 }
 
+// Non-blocking motor scheduling
+void scheduleMotor(int pin1, int pin2, int motorNum, bool forward, int speed, unsigned long runMs) {
+  Serial.print("Scheduled Motor "); Serial.print(motorNum); Serial.print(" -> ");
+  Serial.println(forward ? "Forward" : "Backward");
+  // Start motor immediately
+  if (forward) {
+    analogWrite(pin1, speed); digitalWrite(pin2, LOW);
+  } else {
+    digitalWrite(pin1, LOW); analogWrite(pin2, speed);
+  }
+  // Schedule stop via millis
+  currentMotor = {true, millis(), runMs, pin1, pin2, forward, speed};
+}
+
+void scheduleMotorSequence(int p1a, int p2a, int p1b, int p2b, int p1c, int p2c, int p1d, int p2d, bool fwd, int spd, unsigned long ms) {
+  Serial.println(fwd ? "Scheduled: Forward" : "Scheduled: Backward");
+  analogWrite(p1a, spd); digitalWrite(p2a, LOW);
+  analogWrite(p1b, spd); digitalWrite(p2b, LOW);
+  analogWrite(p1c, spd); digitalWrite(p2c, LOW);
+  analogWrite(p1d, spd); digitalWrite(p2d, LOW);
+  currentMotor = {true, millis(), ms, 0, 0, fwd, spd};
+}
+
+void turnLeftNonBlocking(int speed, unsigned long runMs) {
+  Serial.println("Scheduled: turnLeft");
+  setMotor(M5_PIN1, M5_PIN2, false, speed);
+  setMotor(M6_PIN1, M6_PIN2, true, speed);
+  setMotor(M4_PIN1, M4_PIN2, false, speed);
+  setMotor(M3_PIN1, M3_PIN2, true, speed);
+  currentMotor = {true, millis(), runMs, 0, 0, false, speed};
+}
+
+void turnRightNonBlocking(int speed, unsigned long runMs) {
+  Serial.println("Scheduled: turnRight");
+  setMotor(M6_PIN1, M6_PIN2, true, speed);
+  setMotor(M5_PIN1, M5_PIN2, false, speed);
+  setMotor(M4_PIN1, M4_PIN2, true, speed);
+  setMotor(M3_PIN1, M3_PIN2, false, speed);
+  currentMotor = {true, millis(), runMs, 0, 0, true, speed};
+}
+
+// Keep old functions for compatibility
 void moveForward(int speed, unsigned long runMs) {
   Serial.println("Action: moveForward (m4,m5,m6,m3) -> Forward");
   setMotor(M4_PIN1, M4_PIN2, true, speed);
   setMotor(M5_PIN1, M5_PIN2, true, speed);
   setMotor(M6_PIN1, M6_PIN2, true, speed);
   setMotor(M3_PIN1, M3_PIN2, true, speed);
-  delay(runMs);
-  stopAllMotors();
-  delay(150);
 }
 
 void moveBackward(int speed, unsigned long runMs) {
@@ -294,41 +329,38 @@ void moveBackward(int speed, unsigned long runMs) {
   setMotor(M5_PIN1, M5_PIN2, false, speed);
   setMotor(M6_PIN1, M6_PIN2, false, speed);
   setMotor(M3_PIN1, M3_PIN2, false, speed);
-  delay(runMs);
-  stopAllMotors();
-  delay(150);
 }
 
 void turnLeft(int speed, unsigned long runMs) {
   Serial.println("Action: turnLeft -> M6 forward, M5 backward, M3 forward, M4 backward");
   setMotor(M5_PIN1, M5_PIN2, false, speed);
   setMotor(M6_PIN1, M6_PIN2, true, speed);
-  
-  
-  setMotor(M4_PIN1, M4_PIN2, false, speed);setMotor(M3_PIN1, M3_PIN2, true, speed);
-  delay(runMs);
-  stopAllMotors();
-  delay(150);
+  setMotor(M4_PIN1, M4_PIN2, false, speed);
+  setMotor(M3_PIN1, M3_PIN2, true, speed);
 }
 
 void turnRight(int speed, unsigned long runMs) {
   Serial.println("Action: turnRight -> opposite of turnLeft");
-  
   setMotor(M6_PIN1, M6_PIN2, true, speed);
   setMotor(M5_PIN1, M5_PIN2, false, speed);
-
   setMotor(M4_PIN1, M4_PIN2, true, speed);
   setMotor(M3_PIN1, M3_PIN2, false, speed);
-  
-  delay(runMs);
-  stopAllMotors();
-  delay(150);
 }
 // // Motor 3 F
 // Motor 4 E
 // Motor 5 B
 // // Motor 6 A
+// Check if motor timing has elapsed and stop if needed
+void updateMotorTiming() {
+  if (currentMotor.active && (millis() - currentMotor.startTime >= currentMotor.duration)) {
+    stopAllMotors();
+    currentMotor.active = false;
+    Serial.println("Motor runtime complete");
+  }
+}
+
 void loop() {
   server.handleClient();
-  delay(10);
+  updateMotorTiming();  // Non-blocking check for motor timeout
+  delay(5);  // Reduced from 10ms for better responsiveness
 }
