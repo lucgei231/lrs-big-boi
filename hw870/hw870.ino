@@ -64,10 +64,23 @@ void setAllMotors(bool forward, int speed) {
 String htmlPage() {
   return R"rawliteral(
 <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Lucas Control</title><style>button{width:140px;height:50px;margin:6px;font-size:16px}</style></head><body>
+<title>Lucas Control</title><style>
+body { font-family: Arial, sans-serif; text-align: center; background-color: #f0f0f0; }
+h3 { color: #333; }
+button { width: 140px; height: 50px; margin: 6px; font-size: 16px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
+button:hover { background-color: #45a049; }
+.control-section { margin: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 10px; background-color: white; }
+</style></head><body>
 <h3>Lucas Motor Control</h3>
+<div class="control-section">
+<h4>All Motors</h4>
 <div><button onclick=location.href='/all/forward'>All Forward</button><button onclick=location.href='/all/backward'>All Back</button><button onclick=location.href='/all/stop'>All Stop</button></div>
+</div>
+<div class="control-section">
+<h4>Directional Control</h4>
 <div><button onclick=location.href='/forward'>Forward</button><button onclick=location.href='/backward'>Backward</button><button onclick=location.href='/left'>Left</button><button onclick=location.href='/right'>Right</button><button onclick=location.href='/stop'>Stop</button></div>
+</div>
+<div class="control-section">
 <h4>Individual Motors</h4>
 <div> M1 <button onclick=location.href='/m1/forward'>F</button> <button onclick=location.href='/m1/backward'>B</button></div>
 <div> M2 <button onclick=location.href='/m2/forward'>F</button> <button onclick=location.href='/m2/backward'>B</button></div>
@@ -75,6 +88,24 @@ String htmlPage() {
 <div> M4 <button onclick=location.href='/m4/forward'>F</button> <button onclick=location.href='/m4/backward'>B</button></div>
 <div> M5 <button onclick=location.href='/m5/forward'>F</button> <button onclick=location.href='/m5/backward'>B</button></div>
 <div> M6 <button onclick=location.href='/m6/forward'>F</button> <button onclick=location.href='/m6/backward'>B</button></div>
+</div>
+<div class="control-section">
+<h4>All Motors</h4>
+<div><button onclick=location.href='/all/forward'>All Forward</button><button onclick=location.href='/all/backward'>All Back</button><button onclick=location.href='/all/stop'>All Stop</button></div>
+</div>
+<div class="control-section">
+<h4>Directional Control</h4>
+<div><button onclick=location.href='/forward'>Forward</button><button onclick=location.href='/backward'>Backward</button><button onclick=location.href='/left'>Left</button><button onclick=location.href='/right'>Right</button><button onclick=location.href='/stop'>Stop</button></div>
+</div>
+<div class="control-section">
+<h4>Individual Motors</h4>
+<div> M1 <button onclick=location.href='/m1/forward'>F</button> <button onclick=location.href='/m1/backward'>B</button></div>
+<div> M2 <button onclick=location.href='/m2/forward'>F</button> <button onclick=location.href='/m2/backward'>B</button></div>
+<div> M3 <button onclick=location.href='/m3/forward'>F</button> <button onclick=location.href='/m3/backward'>B</button></div>
+<div> M4 <button onclick=location.href='/m4/forward'>F</button> <button onclick=location.href='/m4/backward'>B</button></div>
+<div> M5 <button onclick=location.href='/m5/forward'>F</button> <button onclick=location.href='/m5/backward'>B</button></div>
+<div> M6 <button onclick=location.href='/m6/forward'>F</button> <button onclick=location.href='/m6/backward'>B</button></div>
+</div>
 <p>mDNS: <b>lucas.local</b></p>
 </body></html>
 )rawliteral";
