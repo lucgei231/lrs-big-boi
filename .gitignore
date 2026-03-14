@@ -1,2 +1,3 @@
 *.zip
 *secrets.h
+hw870/arduino_secrets.h
