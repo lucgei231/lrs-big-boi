@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
+#include <ArduinoOTA.h>
 
 // WiFi credentials (user requested)
 const char* WIFI_SSID = "potato";
@@ -99,15 +100,6 @@ button:hover { background-color: #45a049; }
 <div><button onclick=location.href='/forward'>Forward</button><button onclick=location.href='/backward'>Backward</button><button onclick=location.href='/left'>Left</button><button onclick=location.href='/right'>Right</button><button onclick=location.href='/stop'>Stop</button></div>
 </div>
 <div class="control-section">
-<h4>Individual Motors</h4>
-<div> M1 <button onclick=location.href='/m1/forward'>F</button> <button onclick=location.href='/m1/backward'>B</button></div>
-<div> M2 <button onclick=location.href='/m2/forward'>F</button> <button onclick=location.href='/m2/backward'>B</button></div>
-<div> M3 <button onclick=location.href='/m3/forward'>F</button> <button onclick=location.href='/m3/backward'>B</button></div>
-<div> M4 <button onclick=location.href='/m4/forward'>F</button> <button onclick=location.href='/m4/backward'>B</button></div>
-<div> M5 <button onclick=location.href='/m5/forward'>F</button> <button onclick=location.href='/m5/backward'>B</button></div>
-<div> M6 <button onclick=location.href='/m6/forward'>F</button> <button onclick=location.href='/m6/backward'>B</button></div>
-</div>
-<div class="control-section">
 <h4>Sensor Readings</h4>
 <div class="sensor-display">Ultrasonic Distance: <span id="ultrasonic">--</span> cm</div>
 <div class="sensor-display">IR Analog: <span id="irAnalog">--</span></div>
@@ -193,6 +185,9 @@ void setup(){
   Serial.println();
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("WiFi connected, IP: "); Serial.println(WiFi.localIP());
+    // Start OTA
+    ArduinoOTA.begin();
+    Serial.println("OTA ready");
   } else {
     Serial.println("WiFi connect failed or timed out");
   }
@@ -423,6 +418,7 @@ void updateMotorTiming() {
 }
 
 void loop() {
+  ArduinoOTA.handle();
   server.handleClient();
   updateMotorTiming();  // Non-blocking check for motor timeout
   delay(5);  // Reduced from 10ms for better responsiveness
