@@ -70,6 +70,7 @@ h3 { color: #333; }
 button { width: 140px; height: 50px; margin: 6px; font-size: 16px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
 button:hover { background-color: #45a049; }
 .control-section { margin: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 10px; background-color: white; }
+.sensor-display { font-size: 18px; margin: 10px; }
 </style></head><body>
 <h3>Lucas Motor Control</h3>
 <div class="control-section">
@@ -106,7 +107,27 @@ button:hover { background-color: #45a049; }
 <div> M5 <button onclick=location.href='/m5/forward'>F</button> <button onclick=location.href='/m5/backward'>B</button></div>
 <div> M6 <button onclick=location.href='/m6/forward'>F</button> <button onclick=location.href='/m6/backward'>B</button></div>
 </div>
+<div class="control-section">
+<h4>Sensor Readings</h4>
+<div class="sensor-display">Ultrasonic Distance: <span id="ultrasonic">--</span> cm</div>
+<div class="sensor-display">IR Analog: <span id="irAnalog">--</span></div>
+<div class="sensor-display">IR Digital: <span id="irDigital">--</span></div>
+</div>
 <p>mDNS: <b>lucas.local</b></p>
+<script>
+function updateSensors() {
+  fetch('/sensors')
+    .then(response => response.json())
+    .then(data => {
+      document.getElementById('ultrasonic').textContent = data.ultrasonic;
+      document.getElementById('irAnalog').textContent = data.irAnalog;
+      document.getElementById('irDigital').textContent = data.irDigital;
+    })
+    .catch(error => console.error('Error fetching sensors:', error));
+}
+setInterval(updateSensors, 1000);
+updateSensors();
+</script>
 </body></html>
 )rawliteral";
 }
@@ -186,6 +207,17 @@ void setup(){
 
   // Web server endpoints
   server.on("/", [](){ server.send(200, "text/html", htmlPage()); });
+  server.on("/sensors", [](){
+    int ultrasonic = readUltrasonicAnalog();
+    int irAnalog = analogRead(SENSOR2_A0);
+    int irDigital = digitalRead(SENSOR2_D0);
+    String json = "{";
+    json += "\"ultrasonic\":" + String(ultrasonic) + ",";
+    json += "\"irAnalog\":" + String(irAnalog) + ",";
+    json += "\"irDigital\":" + String(irDigital);
+    json += "}";
+    server.send(200, "application/json", json);
+  });
   server.on("/all/forward", [](){ setAllMotors(true, 200); server.sendHeader("Location","/"); server.send(302,"text/plain",""); });
   server.on("/all/backward", [](){ setAllMotors(false, 200); server.sendHeader("Location","/"); server.send(302,"text/plain",""); });
   server.on("/all/stop", [](){ stopAllMotors(); server.sendHeader("Location","/"); server.send(302,"text/plain",""); });
