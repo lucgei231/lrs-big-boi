@@ -2,7 +2,7 @@
 
 #include <ArduinoIoTCloud.h>
 #include <Arduino_ConnectionHandler.h>
-
+#include "arduino_secrets.h"
 const char DEVICE_LOGIN_NAME[]  = "1ea056ca-1b52-46ff-b76e-08ba61a683af";
 
 const char SSID[]               = SECRET_SSID;    // Network SSID (name)

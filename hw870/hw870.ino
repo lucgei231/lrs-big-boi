@@ -159,6 +159,12 @@ MotorState currentMotor = {false, 0, 0, 0, 0, false, 0};
 
 void setup(){
   Serial.begin(115200);
+  delay(500);
+  Serial.println("\n\n=== LUCAS STARTUP ===");
+  Serial.println("Initializing Serial1 for Micro:bit at 9600 baud...");
+  Serial1.begin(9600);  // Micro:bit communication on UART1
+  Serial.println("Serial1 initialized on GPIO 9 (RX) / GPIO 10 (TX)");
+  Serial.println("Waiting for Micro:bit commands...");
   // This delay gives the chance to wait for a Serial Monitor without blocking if none is found
   delay(1500); 
 
@@ -352,18 +358,26 @@ void alternateM5() {
 void setMotor(int pin1, int pin2, bool forward, int speed) {
   if (forward) {
     digitalWrite(pin1, HIGH); digitalWrite(pin2, LOW);
+    Serial.print("    [Motor] Pin ");
+    Serial.print(pin1);
+    Serial.println(" HIGH (forward)");
   } else {
     digitalWrite(pin1, LOW); digitalWrite(pin2, HIGH);
+    Serial.print("    [Motor] Pin ");
+    Serial.print(pin2);
+    Serial.println(" HIGH (backward)");
   }
 }
 
 void stopAllMotors() {
+  Serial.println("    [Motor] Stopping all motors...");
   digitalWrite(M1_PIN1, LOW); digitalWrite(M1_PIN2, LOW);
   digitalWrite(M2_PIN1, LOW); digitalWrite(M2_PIN2, LOW);
   digitalWrite(M3_PIN1, LOW); digitalWrite(M3_PIN2, LOW);
   digitalWrite(M4_PIN1, LOW); digitalWrite(M4_PIN2, LOW);
   digitalWrite(M5_PIN1, LOW); digitalWrite(M5_PIN2, LOW);
   digitalWrite(M6_PIN1, LOW); digitalWrite(M6_PIN2, LOW);
+  Serial.println("    [Motor] All motors stopped!");
 }
 
 // Non-blocking motor scheduling
@@ -381,12 +395,32 @@ void scheduleMotor(int pin1, int pin2, int motorNum, bool forward, int speed, un
 }
 
 void scheduleMotorSequence(int p1a, int p2a, int p1b, int p2b, int p1c, int p2c, int p1d, int p2d, bool fwd, int spd, unsigned long ms) {
-  Serial.println(fwd ? "Scheduled: Forward" : "Scheduled: Backward");
-  analogWrite(p1a, spd); digitalWrite(p2a, LOW);
-  analogWrite(p1b, spd); digitalWrite(p2b, LOW);
-  analogWrite(p1c, spd); digitalWrite(p2c, LOW);
-  analogWrite(p1d, spd); digitalWrite(p2d, LOW);
+  Serial.print("    [MotorSeq] Starting sequence: ");
+  Serial.println(fwd ? "FORWARD" : "BACKWARD");
+  Serial.print("    [MotorSeq] Motor1: Pins ");
+  Serial.print(p1a); Serial.print(","); Serial.println(p2a);
+  Serial.print("    [MotorSeq] Motor2: Pins ");
+  Serial.print(p1b); Serial.print(","); Serial.println(p2b);
+  Serial.print("    [MotorSeq] Motor3: Pins ");
+  Serial.print(p1c); Serial.print(","); Serial.println(p2c);
+  Serial.print("    [MotorSeq] Motor4: Pins ");
+  Serial.print(p1d); Serial.print(","); Serial.println(p2d);
+  Serial.print("    [MotorSeq] Speed: "); Serial.print(spd);
+  Serial.print(", Duration: "); Serial.print(ms); Serial.println("ms");
+  
+  if (fwd) {
+    analogWrite(p1a, spd); digitalWrite(p2a, LOW);
+    analogWrite(p1b, spd); digitalWrite(p2b, LOW);
+    analogWrite(p1c, spd); digitalWrite(p2c, LOW);
+    analogWrite(p1d, spd); digitalWrite(p2d, LOW);
+  } else {
+    digitalWrite(p1a, LOW); analogWrite(p2a, spd);
+    digitalWrite(p1b, LOW); analogWrite(p2b, spd);
+    digitalWrite(p1c, LOW); analogWrite(p2c, spd);
+    digitalWrite(p1d, LOW); analogWrite(p2d, spd);
+  }
   currentMotor = {true, millis(), ms, 0, 0, fwd, spd};
+  Serial.println("    [MotorSeq] Motors activated!");
 }
 
 void turnLeftNonBlocking(int speed, unsigned long runMs) {
@@ -452,10 +486,78 @@ void updateMotorTiming() {
   }
 }
 
+// Handle micro:bit button commands
+void handleMicrobitCommands() {
+  // Check buffer status periodically (every 100ms)
+  static unsigned long lastBufferCheck = 0;
+  if (millis() - lastBufferCheck > 100) {
+    lastBufferCheck = millis();
+    int available = Serial1.available();
+    if (available > 0) {
+      Serial.print("[SERIAL1] ");
+      Serial.print(available);
+      Serial.println(" bytes available");
+    }
+  }
+
+  if (Serial1.available()) {
+    char cmd = Serial1.read();
+    Serial.print("\n>>> COMMAND RECEIVED: '");
+    Serial.print(cmd);
+    Serial.println("'");
+    Serial.print("    ASCII code: ");
+    Serial.println((int)cmd);
+    
+    switch(cmd) {
+      case 'F':  // Forward
+        Serial.println("    ACTION: All Motors Forward");
+        Serial.println("    Calling scheduleMotorSequence...");
+        scheduleMotorSequence(M4_PIN1, M4_PIN2, M5_PIN1, M5_PIN2, M6_PIN1, M6_PIN2, M3_PIN1, M3_PIN2, true, 200, 2000);
+        Serial.println("    Motors started!");
+        break;
+        
+      case 'S':  // Stop
+        Serial.println("    ACTION: All Motors STOP");
+        Serial.println("    Calling stopAllMotors...");
+        stopAllMotors();
+        Serial.println("    Motors stopped!");
+        break;
+        
+      case 'B':  // Backward
+        Serial.println("    ACTION: All Motors Backward");
+        Serial.println("    Calling scheduleMotorSequence...");
+        scheduleMotorSequence(M4_PIN1, M4_PIN2, M5_PIN1, M5_PIN2, M6_PIN1, M6_PIN2, M3_PIN1, M3_PIN2, false, 200, 2000);
+        Serial.println("    Motors started!");
+        break;
+        
+      case 'L':  // Turn Left
+        Serial.println("    ACTION: Turn Left");
+        Serial.println("    Calling turnLeftNonBlocking...");
+        turnLeftNonBlocking(200, 2000);
+        Serial.println("    Turn started!");
+        break;
+        
+      case 'R':  // Turn Right
+        Serial.println("    ACTION: Turn Right");
+        Serial.println("    Calling turnRightNonBlocking...");
+        turnRightNonBlocking(200, 2000);
+        Serial.println("    Turn started!");
+        break;
+        
+      default:
+        Serial.print("    UNKNOWN COMMAND! (");
+        Serial.print((int)cmd);
+        Serial.println(")");
+        break;
+    }
+  }
+}
+
 void loop() {
   ArduinoCloud.update();
   ArduinoOTA.handle();
   server.handleClient();
+  handleMicrobitCommands();  // Check for micro:bit button presses
   updateMotorTiming();  // Non-blocking check for motor timeout
   delay(5);  // Reduced from 10ms for better responsiveness
 }
