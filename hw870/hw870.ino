@@ -161,9 +161,9 @@ void setup(){
   Serial.begin(115200);
   delay(500);
   Serial.println("\n\n=== LUCAS STARTUP ===");
-  Serial.println("Initializing Serial1 for Micro:bit at 9600 baud...");
-  Serial1.begin(9600);  // Micro:bit communication on UART1
-  Serial.println("Serial1 initialized on GPIO 9 (RX) / GPIO 10 (TX)");
+  Serial.println("Initializing Serial2 for Micro:bit at 9600 baud...");
+  Serial2.begin(9600, SERIAL_8N1, 16, 17);  // RX=16, TX=17 on ESP32
+  Serial.println("Serial2 initialized on GPIO 16 (RX) / GPIO 17 (TX)");
   Serial.println("Waiting for Micro:bit commands...");
   // This delay gives the chance to wait for a Serial Monitor without blocking if none is found
   delay(1500); 
@@ -492,16 +492,16 @@ void handleMicrobitCommands() {
   static unsigned long lastBufferCheck = 0;
   if (millis() - lastBufferCheck > 100) {
     lastBufferCheck = millis();
-    int available = Serial1.available();
+    int available = Serial2.available();
     if (available > 0) {
-      Serial.print("[SERIAL1] ");
+      Serial.print("[SERIAL2] ");
       Serial.print(available);
       Serial.println(" bytes available");
     }
   }
 
-  if (Serial1.available()) {
-    char cmd = Serial1.read();
+  if (Serial2.available()) {
+    char cmd = Serial2.read();
     Serial.print("\n>>> COMMAND RECEIVED: '");
     Serial.print(cmd);
     Serial.println("'");

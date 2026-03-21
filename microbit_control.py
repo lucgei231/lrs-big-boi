@@ -2,7 +2,6 @@
 # Upload this to your micro:bit using the MicroPython editor at https://python.microbit.org
 
 from microbit import *
-import serial
 
 # Initialize serial communication with Arduino (9600 baud)
 uart.init(baudrate=9600)
