@@ -21,10 +21,6 @@
 #include <ArduinoOTA.h>
 #include "thingProperties.h"
 
-// WiFi credentials (user requested)
-const char* WIFI_SSID = "potato";
-const char* WIFI_PASS = "potato123";
-
 WebServer server(80);
 
 const int TRIG_PIN = 21;  // Trigger pin
@@ -165,18 +161,8 @@ void setup(){
   // Defined in thingProperties.h
   initProperties();
 
-  // Connect to Arduino IoT Cloud
+  // Connect to Arduino IoT Cloud (handles WiFi automatically)
   ArduinoCloud.begin(ArduinoIoTPreferredConnection);
-  
-  /*
-     The following function allows you to obtain more information
-     related to the state of network and IoT Cloud connection and errors
-     the higher number the more granular information you’ll get.
-     The default is 0 (only errors).
-     Maximum is 4
- */
-  setDebugMessageLevel(2);
-  ArduinoCloud.printDebugInfo();
   
   // Configure ultrasonic pins
   pinMode(TRIG_PIN, OUTPUT);
@@ -208,24 +194,9 @@ void setup(){
   digitalWrite(M5_PIN1, LOW); digitalWrite(M5_PIN2, LOW);
   digitalWrite(M6_PIN1, LOW); digitalWrite(M6_PIN2, LOW);
 
-  // Connect to WiFi
-  Serial.print("Connecting to WiFi: "); Serial.println(WIFI_SSID);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print('.');
-    if (millis() - start > 20000) break; // timeout 20s
-  }
-  Serial.println();
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("WiFi connected, IP: "); Serial.println(WiFi.localIP());
-    // Start OTA
-    ArduinoOTA.begin();
-    Serial.println("OTA ready");
-  } else {
-    Serial.println("WiFi connect failed or timed out");
-  }
+  // Arduino IoT Cloud handles WiFi connection automatically
+  Serial.println("Connecting to Arduino IoT Cloud...");
+  delay(2000); // Give it time to connect
 
   // Start mDNS
   if (MDNS.begin("lucas")) {
