@@ -63,6 +63,10 @@ void moveBackward(int speed, unsigned long runMs);
 void turnLeft(int speed, unsigned long runMs);
 void turnRight(int speed, unsigned long runMs);
 void runMotor(int pin1, int pin2, int motorNum, bool forward, int speed, unsigned long runMs);
+void scheduleMotor(int pin1, int pin2, int motorNum, bool forward, int speed, unsigned long runMs);
+void scheduleMotorSequence(int p1a, int p2a, int p1b, int p2b, int p1c, int p2c, int p1d, int p2d, bool fwd, int spd, unsigned long ms);
+void turnLeftNonBlocking(int speed, unsigned long runMs);
+void turnRightNonBlocking(int speed, unsigned long runMs);
 
 // Sensor functions
 int readUltrasonicAnalog();
