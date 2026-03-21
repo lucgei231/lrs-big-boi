@@ -19,7 +19,7 @@
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <ArduinoOTA.h>
-#include "thingProperties.h"
+// #include "thingProperties.h"  // Temporarily disabled to fix compilation
 
 WebServer server(80);
 
@@ -63,6 +63,9 @@ void moveBackward(int speed, unsigned long runMs);
 void turnLeft(int speed, unsigned long runMs);
 void turnRight(int speed, unsigned long runMs);
 void runMotor(int pin1, int pin2, int motorNum, bool forward, int speed, unsigned long runMs);
+
+// Sensor functions
+int readUltrasonicAnalog();
 
 // helper sets all motors to same direction/speed
 void setAllMotors(bool forward, int speed) {
@@ -159,10 +162,20 @@ void setup(){
   delay(1500); 
 
   // Defined in thingProperties.h
-  initProperties();
+  // initProperties();  // Temporarily disabled
 
   // Connect to Arduino IoT Cloud (handles WiFi automatically)
-  ArduinoCloud.begin(ArduinoIoTPreferredConnection);
+  // ArduinoCloud.begin(ArduinoIoTPreferredConnection);  // Temporarily disabled
+  
+  // Manual WiFi connection
+  WiFi.begin("potato", "potato123");
+  Serial.print("Connecting to WiFi...");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println(" Connected!");
+  Serial.print("IP: "); Serial.println(WiFi.localIP());
   
   // Configure ultrasonic pins
   pinMode(TRIG_PIN, OUTPUT);
@@ -197,6 +210,11 @@ void setup(){
   // Arduino IoT Cloud handles WiFi connection automatically
   Serial.println("Connecting to Arduino IoT Cloud...");
   delay(2000); // Give it time to connect
+  
+  // Initialize OTA
+  ArduinoOTA.setHostname("Lucas-ESP32");
+  ArduinoOTA.begin();
+  Serial.println("OTA initialized");
 
   // Start mDNS
   if (MDNS.begin("lucas")) {
@@ -261,6 +279,14 @@ void setup(){
 
   server.begin();
   Serial.println("HTTP server started");
+  Serial.println("\n=== LUCAS ROBOT CONTROL ===");
+  Serial.println("Web interface: http://lucas.local");
+  Serial.println("Serial commands:");
+  Serial.println("  F/B/L/R/S - Directional control");
+  Serial.println("  AF/AB/AS - All motors control"); 
+  Serial.println("  M1F/M1B to M6F/M6B - Individual motors");
+  Serial.println("Send commands via Serial Monitor");
+}
 }
 
 // Function to read ultrasonic sensor via analog input
@@ -423,10 +449,81 @@ void updateMotorTiming() {
   }
 }
 
+// Handle serial commands for motor control
+void handleSerialCommand(String cmd) {
+  Serial.print("Serial Command: ");
+  Serial.println(cmd);
+  
+  if (cmd == "FORWARD" || cmd == "F") {
+    Serial.println("Moving Forward");
+    scheduleMotorSequence(M4_PIN1, M4_PIN2, M5_PIN1, M5_PIN2, M6_PIN1, M6_PIN2, M3_PIN1, M3_PIN2, true, 200, 2000);
+  }
+  else if (cmd == "BACKWARD" || cmd == "B") {
+    Serial.println("Moving Backward");
+    scheduleMotorSequence(M4_PIN1, M4_PIN2, M5_PIN1, M5_PIN2, M6_PIN1, M6_PIN2, M3_PIN1, M3_PIN2, false, 200, 2000);
+  }
+  else if (cmd == "LEFT" || cmd == "L") {
+    Serial.println("Turning Left");
+    turnLeftNonBlocking(200, 2000);
+  }
+  else if (cmd == "RIGHT" || cmd == "R") {
+    Serial.println("Turning Right");
+    turnRightNonBlocking(200, 2000);
+  }
+  else if (cmd == "STOP" || cmd == "S") {
+    Serial.println("Stopping All Motors");
+    stopAllMotors();
+  }
+  else if (cmd == "ALL_FORWARD" || cmd == "AF") {
+    Serial.println("All Motors Forward");
+    setAllMotors(true, 200);
+  }
+  else if (cmd == "ALL_BACKWARD" || cmd == "AB") {
+    Serial.println("All Motors Backward");
+    setAllMotors(false, 200);
+  }
+  else if (cmd == "ALL_STOP" || cmd == "AS") {
+    Serial.println("All Motors Stop");
+    stopAllMotors();
+  }
+  else if (cmd.startsWith("M")) {
+    // Individual motor control: M1F, M2B, etc.
+    int motorNum = cmd.substring(1, 2).toInt();
+    String direction = cmd.substring(2);
+    bool forward = (direction == "F");
+    
+    if (motorNum >= 1 && motorNum <= 6) {
+      Serial.print("Motor "); Serial.print(motorNum); Serial.println(forward ? " Forward" : " Backward");
+      if (motorNum == 1) scheduleMotor(M1_PIN1, M1_PIN2, motorNum, forward, 200, 2000);
+      if (motorNum == 2) scheduleMotor(M2_PIN1, M2_PIN2, motorNum, forward, 200, 2000);
+      if (motorNum == 3) scheduleMotor(M3_PIN1, M3_PIN2, motorNum, forward, 200, 2000);
+      if (motorNum == 4) scheduleMotor(M4_PIN1, M4_PIN2, motorNum, forward, 200, 2000);
+      if (motorNum == 5) scheduleMotor(M5_PIN1, M5_PIN2, motorNum, forward, 200, 2000);
+      if (motorNum == 6) scheduleMotor(M6_PIN1, M6_PIN2, motorNum, forward, 200, 2000);
+    }
+  }
+  else {
+    Serial.println("Unknown command. Available commands:");
+    Serial.println("F/B/L/R/S - Directional control");
+    Serial.println("AF/AB/AS - All motors control");
+    Serial.println("M1F/M1B to M6F/M6B - Individual motors");
+  }
+}
+
 void loop() {
-  ArduinoCloud.update();
+  // ArduinoCloud.update();  // Temporarily disabled
   ArduinoOTA.handle();
   server.handleClient();
   updateMotorTiming();  // Non-blocking check for motor timeout
+  
+  // Handle serial commands
+  if (Serial.available()) {
+    String command = Serial.readStringUntil('\n');
+    command.trim();
+    if (command.length() > 0) {
+      handleSerialCommand(command);
+    }
+  }
+  
   delay(5);  // Reduced from 10ms for better responsiveness
 }
