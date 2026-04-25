@@ -237,7 +237,26 @@ void setup(){
 
 }
 void loop(){
+  if (doConnect) {
+    connectToServer();
+
+  }
   if (currentCommand == FORWARD) {
     Serial.println("bum bum tato");
   }
+  uint32_t now = millis();
+  if (!isConnected && !doConnect && (now - lastScanKickMs > 2000)) {
+    lastScanKickMs = now;
+
+    if (now - (uint32_t)lastOnResultMs > 6000) {
+      Serial.println("WD: scan stuck -> reset BLE");
+      resetBluetoothStack();
+    } else {
+      if (!NimBLEDevice::getScan()->isScanning()) {
+        Serial.println("WD: scan not running -> restart");
+        startScanNow();
+      }
+    }
+  }
+  
 }
