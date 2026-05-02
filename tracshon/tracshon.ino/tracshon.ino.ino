@@ -11,6 +11,7 @@ volatile CarCommand currentCommand = STOP;
 #define MOTOR1_REV 17   // D17
 #define MOTOR2_FWD 25   // D25
 #define MOTOR2_REV 26   // D26
+#define LED_PIN 2       // D2
 
 static bool     clickActive = false;
 static uint8_t  clickGroup  = 0;
@@ -193,8 +194,8 @@ void notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic,
     } else if (clickGroup == 7) {
       currentCommand = STOP;
     } else if (clickGroup == 4 || clickGroup == 5) {
-      if (lastX < firstX) currentCommand = LEFT;
-      else if (lastX > firstX) currentCommand = RIGHT;
+      if (lastX < firstX) currentCommand = RIGHT;  // Fixed: swapped left/right
+      else if (lastX > firstX) currentCommand = LEFT;
       else currentCommand = STOP;
     } else if (clickGroup == 6) {
       if (lastY < firstY) currentCommand = FORWARD;
@@ -287,6 +288,7 @@ void setup(){
   pinMode(MOTOR1_REV, OUTPUT);
   pinMode(MOTOR2_FWD, OUTPUT);
   pinMode(MOTOR2_REV, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
   
   // Start with all motors off
   setMotorControl(STOP);
@@ -299,9 +301,23 @@ void setup(){
 }
 void loop(){
   static CarCommand lastCommand = STOP;
+  static uint32_t lastLedToggle = 0;
+  static bool ledState = false;
   
   if (doConnect) {
     connectToServer();
+  }
+  
+  // LED flashing when not connected
+  if (!isConnected) {
+    uint32_t now = millis();
+    if (now - lastLedToggle > 250) {  // Flash every 250ms
+      ledState = !ledState;
+      digitalWrite(LED_PIN, ledState ? HIGH : LOW);
+      lastLedToggle = now;
+    }
+  } else {
+    digitalWrite(LED_PIN, LOW);  // Turn off LED when connected
   }
   
   // Apply motor control when command changes
