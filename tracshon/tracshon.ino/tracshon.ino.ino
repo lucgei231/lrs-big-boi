@@ -135,20 +135,20 @@ void setMotorControl(CarCommand cmd) {
       Serial.println("MOTOR: Backward");
       break;
     
-    case LEFT:
+    case RIGHT:
       digitalWrite(MOTOR1_FWD, HIGH);
       digitalWrite(MOTOR1_REV, LOW);
       digitalWrite(MOTOR2_FWD, LOW);
       digitalWrite(MOTOR2_REV, HIGH);
-      Serial.println("MOTOR: Left Turn");
+      Serial.println("MOTOR: Right Turn");
       break;
     
-    case RIGHT:
+    case LEFT:
       digitalWrite(MOTOR1_FWD, LOW);
       digitalWrite(MOTOR1_REV, HIGH);
       digitalWrite(MOTOR2_FWD, HIGH);
       digitalWrite(MOTOR2_REV, LOW);
-      Serial.println("MOTOR: Right Turn");
+      Serial.println("MOTOR: Left Turn");
       break;
     
     case STOP:
