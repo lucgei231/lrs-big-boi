@@ -1,7 +1,14 @@
 #include <NimBLEDevice.h>
+#include <FastLED.h>
+
 bool doConnect = false;
 bool isConnected = false;
 uint32_t scanTimeMs = 5000;
+
+// RGB LED Configuration
+#define RGB_LED_PIN 18
+#define NUM_LEDS 12
+CRGB leds[NUM_LEDS];
 
 enum CarCommand : uint8_t { STOP, FORWARD, BACKWARD, LEFT, RIGHT };
 volatile CarCommand currentCommand = STOP;
@@ -12,6 +19,16 @@ volatile CarCommand currentCommand = STOP;
 #define MOTOR2_FWD 25   // D25
 #define MOTOR2_REV 26   // D26
 #define LED_PIN 2       // D2
+
+// Color definitions for RGB LED status
+#define COLOR_OFF CRGB::Black
+#define COLOR_SCANNING CRGB::Purple
+#define COLOR_CONNECTING CRGB::Blue
+#define COLOR_CONNECTED CRGB::Green
+#define COLOR_FORWARD CRGB::Cyan
+#define COLOR_BACKWARD CRGB::Yellow
+#define COLOR_LEFT CRGB::Orange
+#define COLOR_RIGHT CRGB::Red
 
 static bool     clickActive = false;
 static uint8_t  clickGroup  = 0;
@@ -112,6 +129,72 @@ static void scanCompleteCB(NimBLEScanResults results) {
   }
 }
 
+void updateRGBLED() {
+  static uint32_t lastUpdate = 0;
+  static uint8_t animFrame = 0;
+  uint32_t now = millis();
+  
+  if (now - lastUpdate > 50) {  // Update every 50ms
+    lastUpdate = now;
+    animFrame++;
+  }
+  
+  if (!isConnected && !doConnect) {
+    // Scanning - rotating purple pattern
+    for (int i = 0; i < NUM_LEDS; i++) {
+      if ((i + animFrame / 2) % NUM_LEDS < NUM_LEDS / 2) {
+        leds[i] = COLOR_SCANNING;
+      } else {
+        leds[i] = COLOR_OFF;
+      }
+    }
+  } else if (doConnect && !isConnected) {
+    // Connecting - pulsing blue pattern (all LEDs)
+    uint8_t brightness = 50 + (50 * sin(animFrame / 10.0));
+    for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i] = CHSV(160, 255, brightness);  // HSV for blue
+    }
+  } else if (isConnected) {
+    // Connected - show command with color sweep
+    CRGB commandColor;
+    switch (currentCommand) {
+      case FORWARD:
+        commandColor = COLOR_FORWARD;
+        break;
+      case BACKWARD:
+        commandColor = COLOR_BACKWARD;
+        break;
+      case LEFT:
+        commandColor = COLOR_LEFT;
+        break;
+      case RIGHT:
+        commandColor = COLOR_RIGHT;
+        break;
+      case STOP:
+        commandColor = COLOR_CONNECTED;
+        break;
+    }
+    
+    // Fill all LEDs with command color with rotating brightness pattern
+    for (int i = 0; i < NUM_LEDS; i++) {
+      if ((i + animFrame / 3) % NUM_LEDS < 3) {
+        leds[i] = commandColor;
+      } else {
+        leds[i] = commandColor;
+        leds[i].nscale8(150);  // Dim alternate LEDs slightly
+      }
+    }
+  } else {
+    // All off
+    for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i] = COLOR_OFF;
+    }
+  }
+  
+  FastLED.show();
+}
+
+
 static inline int16_t u16le_to_i16(uint8_t lo, uint8_t hi) {
   uint16_t u = (uint16_t)lo | ((uint16_t)hi << 8);
   return (int16_t)u;
@@ -135,20 +218,20 @@ void setMotorControl(CarCommand cmd) {
       Serial.println("MOTOR: Backward");
       break;
     
-    case RIGHT:
+    case LEFT:
       digitalWrite(MOTOR1_FWD, HIGH);
       digitalWrite(MOTOR1_REV, LOW);
       digitalWrite(MOTOR2_FWD, LOW);
       digitalWrite(MOTOR2_REV, HIGH);
-      Serial.println("MOTOR: Right Turn");
+      Serial.println("MOTOR: Left Turn");
       break;
     
-    case LEFT:
+    case RIGHT:
       digitalWrite(MOTOR1_FWD, LOW);
       digitalWrite(MOTOR1_REV, HIGH);
       digitalWrite(MOTOR2_FWD, HIGH);
       digitalWrite(MOTOR2_REV, LOW);
-      Serial.println("MOTOR: Left Turn");
+      Serial.println("MOTOR: Right Turn");
       break;
     
     case STOP:
@@ -194,8 +277,8 @@ void notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic,
     } else if (clickGroup == 7) {
       currentCommand = STOP;
     } else if (clickGroup == 4 || clickGroup == 5) {
-      if (lastX < firstX) currentCommand = RIGHT;  // Fixed: swapped left/right
-      else if (lastX > firstX) currentCommand = LEFT;
+      if (lastX < firstX) currentCommand = LEFT;
+      else if (lastX > firstX) currentCommand = RIGHT;
       else currentCommand = STOP;
     } else if (clickGroup == 6) {
       if (lastY < firstY) currentCommand = FORWARD;
@@ -283,6 +366,12 @@ void setup(){
   // Disable BLE library debug output
   esp_log_level_set("*", ESP_LOG_ERROR);
   
+  // Initialize RGB LED
+  FastLED.addLeds<WS2812, RGB_LED_PIN, GRB>(leds, NUM_LEDS);
+  FastLED.setBrightness(100);
+  leds[0] = COLOR_OFF;
+  FastLED.show();
+  
   // Initialize motor control pins
   pinMode(MOTOR1_FWD, OUTPUT);
   pinMode(MOTOR1_REV, OUTPUT);
@@ -307,6 +396,9 @@ void loop(){
   if (doConnect) {
     connectToServer();
   }
+  
+  // Update RGB LED status
+  updateRGBLED();
   
   // LED flashing when not connected
   if (!isConnected) {
