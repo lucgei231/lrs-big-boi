@@ -63,6 +63,12 @@ class ClientCallbacks : public NimBLEClientCallbacks {
 class ScanCallbacks : public NimBLEScanCallbacks {
   void onResult(const NimBLEAdvertisedDevice* d) override {
     lastOnResultMs = millis();
+     static uint32_t lastMarkMs = 0;
+    uint32_t now = millis();
+    if (now - lastMarkMs > 250) {
+      Serial.println("***");
+      lastMarkMs = now;
+    }
 
     if (!d->isAdvertisingService(NimBLEUUID((uint16_t)0x1812))) return;
 
