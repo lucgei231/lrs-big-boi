@@ -6,6 +6,12 @@ uint32_t scanTimeMs = 5000;
 enum CarCommand : uint8_t { STOP, FORWARD, BACKWARD, LEFT, RIGHT };
 volatile CarCommand currentCommand = STOP;
 
+// Motor control pins
+#define MOTOR1_FWD 16   // D16
+#define MOTOR1_REV 17   // D17
+#define MOTOR2_FWD 25   // D25
+#define MOTOR2_REV 26   // D26
+
 static bool     clickActive = false;
 static uint8_t  clickGroup  = 0;
 static int16_t  firstX = 0, firstY = 0;
@@ -56,19 +62,12 @@ class ClientCallbacks : public NimBLEClientCallbacks {
 
 class ScanCallbacks : public NimBLEScanCallbacks {
   void onResult(const NimBLEAdvertisedDevice* d) override {
-
     lastOnResultMs = millis();
-    static uint32_t lastMarkMs = 0;
-    uint32_t now = millis();
-    if (now - lastMarkMs > 250) {
-      Serial.println("***");
-      lastMarkMs = now;
-    }
 
     if (!d->isAdvertisingService(NimBLEUUID((uint16_t)0x1812))) return;
 
     std::string macStr = d->getAddress().toString();
-    Serial.print("\n Found device MAC: ");
+    Serial.print("\nFound device MAC: ");
     Serial.println(macStr.c_str());
 
     if (strcasecmp(macStr.c_str(), targetAddrStr) != 0) return;
@@ -109,6 +108,50 @@ static void scanCompleteCB(NimBLEScanResults results) {
 static inline int16_t u16le_to_i16(uint8_t lo, uint8_t hi) {
   uint16_t u = (uint16_t)lo | ((uint16_t)hi << 8);
   return (int16_t)u;
+}
+
+void setMotorControl(CarCommand cmd) {
+  switch(cmd) {
+    case FORWARD:
+      digitalWrite(MOTOR1_FWD, HIGH);
+      digitalWrite(MOTOR1_REV, LOW);
+      digitalWrite(MOTOR2_FWD, HIGH);
+      digitalWrite(MOTOR2_REV, LOW);
+      Serial.println("MOTOR: Forward");
+      break;
+    
+    case BACKWARD:
+      digitalWrite(MOTOR1_FWD, LOW);
+      digitalWrite(MOTOR1_REV, HIGH);
+      digitalWrite(MOTOR2_FWD, LOW);
+      digitalWrite(MOTOR2_REV, HIGH);
+      Serial.println("MOTOR: Backward");
+      break;
+    
+    case LEFT:
+      digitalWrite(MOTOR1_FWD, HIGH);
+      digitalWrite(MOTOR1_REV, LOW);
+      digitalWrite(MOTOR2_FWD, LOW);
+      digitalWrite(MOTOR2_REV, HIGH);
+      Serial.println("MOTOR: Left Turn");
+      break;
+    
+    case RIGHT:
+      digitalWrite(MOTOR1_FWD, LOW);
+      digitalWrite(MOTOR1_REV, HIGH);
+      digitalWrite(MOTOR2_FWD, HIGH);
+      digitalWrite(MOTOR2_REV, LOW);
+      Serial.println("MOTOR: Right Turn");
+      break;
+    
+    case STOP:
+      digitalWrite(MOTOR1_FWD, LOW);
+      digitalWrite(MOTOR1_REV, LOW);
+      digitalWrite(MOTOR2_FWD, LOW);
+      digitalWrite(MOTOR2_REV, LOW);
+      Serial.println("MOTOR: Stop");
+      break;
+  }
 }
 
 void notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic,
@@ -228,22 +271,35 @@ void connectToServer() {
 
 void setup(){
   Serial.begin(9600);
+  
+  // Initialize motor control pins
+  pinMode(MOTOR1_FWD, OUTPUT);
+  pinMode(MOTOR1_REV, OUTPUT);
+  pinMode(MOTOR2_FWD, OUTPUT);
+  pinMode(MOTOR2_REV, OUTPUT);
+  
+  // Start with all motors off
+  setMotorControl(STOP);
+  
   NimBLEDevice::init("");
   NimBLEDevice::deleteAllBonds();
   lastScanKickMs = millis();
   lastOnResultMs = millis();
   startScanNow();
-
-
 }
 void loop(){
+  static CarCommand lastCommand = STOP;
+  
   if (doConnect) {
     connectToServer();
-
   }
-  if (currentCommand == FORWARD) {
-    Serial.println("bum bum tato");
+  
+  // Apply motor control when command changes
+  if (currentCommand != lastCommand) {
+    setMotorControl(currentCommand);
+    lastCommand = currentCommand;
   }
+  
   uint32_t now = millis();
   if (!isConnected && !doConnect && (now - lastScanKickMs > 2000)) {
     lastScanKickMs = now;
