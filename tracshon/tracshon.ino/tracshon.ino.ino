@@ -271,6 +271,10 @@ void connectToServer() {
 
 void setup(){
   Serial.begin(9600);
+  delay(500);
+  
+  // Disable BLE library debug output
+  esp_log_level_set("*", ESP_LOG_ERROR);
   
   // Initialize motor control pins
   pinMode(MOTOR1_FWD, OUTPUT);
