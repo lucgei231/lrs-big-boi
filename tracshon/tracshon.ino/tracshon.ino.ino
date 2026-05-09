@@ -1,7 +1,7 @@
 #include <NimBLEDevice.h>
 #include <FastLED.h>
 #include <WiFi.h>
-#include <BetterOTA.h>
+#include <ArduinoOTA.h>
 
 bool doConnect = false;
 bool isConnected = false;
@@ -448,7 +448,24 @@ void setup(){
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("WiFi connected. IP: ");
     Serial.println(WiFi.localIP());
-    BetterOTA.begin("tracshon", "123456");  // device name and password
+    
+    // Setup ArduinoOTA
+    ArduinoOTA.setHostname("tracshon");
+    ArduinoOTA.setPassword("123456");
+    
+    ArduinoOTA.onStart([]() {
+      Serial.println("OTA Update starting...");
+    });
+    ArduinoOTA.onEnd([]() {
+      Serial.println("\nOTA Update finished!");
+    });
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+      Serial.printf("OTA Progress: %u%%\r", (progress / (total / 100)));
+    });
+    ArduinoOTA.onError([](ota_error_t error) {
+      Serial.printf("OTA Error: %u\n", error);
+    });
+    ArduinoOTA.begin();
   } else {
     Serial.println("WiFi connection failed");
   }
@@ -481,7 +498,7 @@ void loop(){
   static bool ledState = false;
   
   // Handle OTA updates
-  BetterOTA.handle();
+  ArduinoOTA.handle();
   
   yield();  // Feed watchdog
   
