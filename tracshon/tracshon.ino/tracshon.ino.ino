@@ -6,7 +6,7 @@ bool isConnected = false;
 uint32_t scanTimeMs = 5000;
 
 // RGB LED Configuration
-#define RGB_LED_PIN 18
+#define RGB_LED_PIN 14  // D14
 #define NUM_LEDS 12
 CRGB leds[NUM_LEDS];
 
@@ -21,14 +21,14 @@ volatile CarCommand currentCommand = STOP;
 #define LED_PIN 2       // D2
 
 // Color definitions for RGB LED status
-#define COLOR_OFF CRGB::Black
-#define COLOR_SCANNING CRGB::Purple
-#define COLOR_CONNECTING CRGB::Blue
-#define COLOR_CONNECTED CRGB::Green
-#define COLOR_FORWARD CRGB::Cyan
-#define COLOR_BACKWARD CRGB::Yellow
-#define COLOR_LEFT CRGB::Orange
-#define COLOR_RIGHT CRGB::Red
+static const CRGB COLOR_OFF       = CRGB::Black;
+static const CRGB COLOR_SCANNING  = CRGB::Purple;
+static const CRGB COLOR_CONNECTING= CRGB::Blue;
+static const CRGB COLOR_CONNECTED = CRGB::Green;
+static const CRGB COLOR_FORWARD   = CRGB::Cyan;
+static const CRGB COLOR_BACKWARD  = CRGB::Yellow;
+static const CRGB COLOR_LEFT      = CRGB::Orange;
+static const CRGB COLOR_RIGHT     = CRGB::Red;
 
 static bool     clickActive = false;
 static uint8_t  clickGroup  = 0;
@@ -57,7 +57,6 @@ static void resetBluetoothStack() {
   }
 
   NimBLEDevice::deinit(true);
-  delay(80);
 
   NimBLEDevice::init("");
   NimBLEDevice::deleteAllBonds();
@@ -109,7 +108,6 @@ static void startScanNow() {
   NimBLEScan* pScan = NimBLEDevice::getScan();
   pScan->stop();
   pScan->clearResults();
-  delay(10);
 
   pScan->setScanCallbacks(&scanCallbacks, false);
   pScan->setInterval(100);
@@ -129,68 +127,119 @@ static void scanCompleteCB(NimBLEScanResults results) {
   }
 }
 
+static inline uint8_t breathBrightness(uint8_t frame, uint8_t offset = 0) {
+  float phase = (frame + offset) * 0.18f;
+  return 96 + (uint8_t)(96.0f * (0.5f + 0.5f * sin(phase)));
+}
+
+static void setAllLEDs(const CRGB &color) {
+  for (int i = 0; i < NUM_LEDS; i++) {
+    leds[i] = color;
+  }
+}
+
+static void showScanning(uint8_t frame) {
+  int head = frame % NUM_LEDS;
+  for (int i = 0; i < NUM_LEDS; i++) {
+    int delta = (i + NUM_LEDS - head) % NUM_LEDS;
+    if (delta == 0) {
+      leds[i] = COLOR_SCANNING;
+    } else if (delta < 3) {
+      leds[i] = COLOR_SCANNING;
+      leds[i].nscale8_video(170);
+    } else if (delta < 6) {
+      leds[i] = COLOR_SCANNING;
+      leds[i].nscale8_video(100);
+    } else {
+      leds[i] = COLOR_OFF;
+    }
+  }
+}
+
+static void showConnecting(uint8_t frame) {
+  uint8_t breath = breathBrightness(frame, 4);
+  uint8_t dim = breath / 3;
+  uint8_t minBright = dim < 24 ? 24 : dim;
+  for (int i = 0; i < NUM_LEDS; i++) {
+    if ((i + frame / 2) % 4 == 0) {
+      leds[i] = CHSV(160, 255, breath);
+    } else {
+      leds[i] = CHSV(160, 255, minBright);
+    }
+  }
+}
+
+static void showCommandStatus(CarCommand cmd, uint8_t frame) {
+  CRGB base;
+  const uint8_t *activeIndexes = nullptr;
+  int activeCount = 0;
+
+  static const uint8_t forwardIndexes[] = {11, 0, 1, 2, 3};
+  static const uint8_t backwardIndexes[] = {5, 6, 7, 8, 9};
+  static const uint8_t leftIndexes[] = {2, 3, 4, 5, 6};
+  static const uint8_t rightIndexes[] = {8, 9, 10, 11, 0};
+
+  uint8_t bright = breathBrightness(frame, 8);
+  uint8_t altBright = bright > 40 ? bright - 40 : 64;
+
+  switch (cmd) {
+    case FORWARD:
+      base = COLOR_FORWARD;
+      activeIndexes = forwardIndexes;
+      activeCount = 5;
+      break;
+    case BACKWARD:
+      base = COLOR_BACKWARD;
+      activeIndexes = backwardIndexes;
+      activeCount = 5;
+      break;
+    case LEFT:
+      base = COLOR_LEFT;
+      activeIndexes = leftIndexes;
+      activeCount = 5;
+      break;
+    case RIGHT:
+      base = COLOR_RIGHT;
+      activeIndexes = rightIndexes;
+      activeCount = 5;
+      break;
+    case STOP:
+    default:
+      for (int i = 0; i < NUM_LEDS; i++) {
+        leds[i] = CHSV(96, 255, (i % 2 == 0) ? bright : altBright);
+      }
+      return;
+  }
+
+  for (int i = 0; i < NUM_LEDS; i++) {
+    leds[i] = base;
+    leds[i].nscale8_video(90);
+  }
+  for (int j = 0; j < activeCount; j++) {
+    leds[activeIndexes[j]] = base;
+  }
+}
+
 void updateRGBLED() {
   static uint32_t lastUpdate = 0;
   static uint8_t animFrame = 0;
   uint32_t now = millis();
-  
-  if (now - lastUpdate > 50) {  // Update every 50ms
+
+  if (now - lastUpdate > 50) {
     lastUpdate = now;
     animFrame++;
   }
-  
+
   if (!isConnected && !doConnect) {
-    // Scanning - rotating purple pattern
-    for (int i = 0; i < NUM_LEDS; i++) {
-      if ((i + animFrame / 2) % NUM_LEDS < NUM_LEDS / 2) {
-        leds[i] = COLOR_SCANNING;
-      } else {
-        leds[i] = COLOR_OFF;
-      }
-    }
+    showScanning(animFrame);
   } else if (doConnect && !isConnected) {
-    // Connecting - pulsing blue pattern (all LEDs)
-    uint8_t brightness = 50 + (50 * sin(animFrame / 10.0));
-    for (int i = 0; i < NUM_LEDS; i++) {
-      leds[i] = CHSV(160, 255, brightness);  // HSV for blue
-    }
+    showConnecting(animFrame);
   } else if (isConnected) {
-    // Connected - show command with color sweep
-    CRGB commandColor;
-    switch (currentCommand) {
-      case FORWARD:
-        commandColor = COLOR_FORWARD;
-        break;
-      case BACKWARD:
-        commandColor = COLOR_BACKWARD;
-        break;
-      case LEFT:
-        commandColor = COLOR_LEFT;
-        break;
-      case RIGHT:
-        commandColor = COLOR_RIGHT;
-        break;
-      case STOP:
-        commandColor = COLOR_CONNECTED;
-        break;
-    }
-    
-    // Fill all LEDs with command color with rotating brightness pattern
-    for (int i = 0; i < NUM_LEDS; i++) {
-      if ((i + animFrame / 3) % NUM_LEDS < 3) {
-        leds[i] = commandColor;
-      } else {
-        leds[i] = commandColor;
-        leds[i].nscale8(150);  // Dim alternate LEDs slightly
-      }
-    }
+    showCommandStatus(currentCommand, animFrame);
   } else {
-    // All off
-    for (int i = 0; i < NUM_LEDS; i++) {
-      leds[i] = COLOR_OFF;
-    }
+    setAllLEDs(COLOR_OFF);
   }
-  
+
   FastLED.show();
 }
 
@@ -315,7 +364,6 @@ void connectToServer() {
   if (!pClient->connect(ringAddr)) {
     NimBLEDevice::deleteClient(pClient);
     Serial.println("Client is not ready");
-    delay(100);
     resetBluetoothStack();
     return;
   }
@@ -326,7 +374,6 @@ void connectToServer() {
   if (!pSvc) {
     Serial.println("HID service not found");
     pClient->disconnect();
-    delay(100);
     resetBluetoothStack();
     return;
   }
@@ -351,7 +398,6 @@ void connectToServer() {
   if (subCount == 0) {
     Serial.println("No notifiable 0x2A4D characteristic found!");
     pClient->disconnect();
-    delay(100);
     resetBluetoothStack();
     return;
   }
@@ -361,8 +407,7 @@ void connectToServer() {
 
 void setup(){
   Serial.begin(9600);
-  delay(500);
-  
+
   // Disable BLE library debug output
   esp_log_level_set("*", ESP_LOG_ERROR);
   
