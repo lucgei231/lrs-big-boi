@@ -20,6 +20,10 @@ volatile CarCommand currentCommand = STOP;
 #define MOTOR2_REV 26   // D26
 #define LED_PIN 2       // D2
 
+static uint8_t motorPWM = 0;  // Current motor PWM level (0-255)
+static uint32_t motorRampStart = 0;
+static CarCommand motorRampTarget = STOP;
+
 // Color definitions for RGB LED status
 static const CRGB COLOR_OFF       = CRGB::Black;
 static const CRGB COLOR_SCANNING  = CRGB::Purple;
@@ -250,45 +254,59 @@ static inline int16_t u16le_to_i16(uint8_t lo, uint8_t hi) {
 }
 
 void setMotorControl(CarCommand cmd) {
+  if (cmd != motorRampTarget) {
+    motorRampTarget = cmd;
+    motorRampStart = millis();
+    motorPWM = 0;
+  }
+
+  // Ramp up over 200ms
+  uint32_t elapsed = millis() - motorRampStart;
+  if (elapsed < 200) {
+    motorPWM = (uint8_t)((elapsed * 255) / 200);
+  } else {
+    motorPWM = 255;  // Full power
+  }
+
   switch(cmd) {
     case FORWARD:
-      digitalWrite(MOTOR1_FWD, HIGH);
-      digitalWrite(MOTOR1_REV, LOW);
-      digitalWrite(MOTOR2_FWD, HIGH);
-      digitalWrite(MOTOR2_REV, LOW);
-      Serial.println("MOTOR: Forward");
+      analogWrite(MOTOR1_FWD, motorPWM);
+      analogWrite(MOTOR1_REV, 0);
+      analogWrite(MOTOR2_FWD, motorPWM);
+      analogWrite(MOTOR2_REV, 0);
+      if (elapsed == 0) Serial.println("MOTOR: Forward");
       break;
     
     case BACKWARD:
-      digitalWrite(MOTOR1_FWD, LOW);
-      digitalWrite(MOTOR1_REV, HIGH);
-      digitalWrite(MOTOR2_FWD, LOW);
-      digitalWrite(MOTOR2_REV, HIGH);
-      Serial.println("MOTOR: Backward");
+      analogWrite(MOTOR1_FWD, 0);
+      analogWrite(MOTOR1_REV, motorPWM);
+      analogWrite(MOTOR2_FWD, 0);
+      analogWrite(MOTOR2_REV, motorPWM);
+      if (elapsed == 0) Serial.println("MOTOR: Backward");
       break;
     
     case LEFT:
-      digitalWrite(MOTOR1_FWD, HIGH);
-      digitalWrite(MOTOR1_REV, LOW);
-      digitalWrite(MOTOR2_FWD, LOW);
-      digitalWrite(MOTOR2_REV, HIGH);
-      Serial.println("MOTOR: Left Turn");
+      analogWrite(MOTOR1_FWD, motorPWM);
+      analogWrite(MOTOR1_REV, 0);
+      analogWrite(MOTOR2_FWD, 0);
+      analogWrite(MOTOR2_REV, motorPWM);
+      if (elapsed == 0) Serial.println("MOTOR: Left Turn");
       break;
     
     case RIGHT:
-      digitalWrite(MOTOR1_FWD, LOW);
-      digitalWrite(MOTOR1_REV, HIGH);
-      digitalWrite(MOTOR2_FWD, HIGH);
-      digitalWrite(MOTOR2_REV, LOW);
-      Serial.println("MOTOR: Right Turn");
+      analogWrite(MOTOR1_FWD, 0);
+      analogWrite(MOTOR1_REV, motorPWM);
+      analogWrite(MOTOR2_FWD, motorPWM);
+      analogWrite(MOTOR2_REV, 0);
+      if (elapsed == 0) Serial.println("MOTOR: Right Turn");
       break;
     
     case STOP:
-      digitalWrite(MOTOR1_FWD, LOW);
-      digitalWrite(MOTOR1_REV, LOW);
-      digitalWrite(MOTOR2_FWD, LOW);
-      digitalWrite(MOTOR2_REV, LOW);
-      Serial.println("MOTOR: Stop");
+      analogWrite(MOTOR1_FWD, 0);
+      analogWrite(MOTOR1_REV, 0);
+      analogWrite(MOTOR2_FWD, 0);
+      analogWrite(MOTOR2_REV, 0);
+      if (elapsed == 0) Serial.println("MOTOR: Stop");
       break;
   }
 }
@@ -438,12 +456,26 @@ void loop(){
   static uint32_t lastLedToggle = 0;
   static bool ledState = false;
   
+  yield();  // Feed watchdog
+  
   if (doConnect) {
     connectToServer();
+    yield();  // Feed watchdog after connection attempt
   }
+  
+  yield();  // Feed watchdog
   
   // Update RGB LED status
   updateRGBLED();
+  
+  // Apply motor control every frame (for PWM ramp-up)
+  if (currentCommand != lastCommand) {
+    setMotorControl(currentCommand);
+    lastCommand = currentCommand;
+  } else if (currentCommand != STOP) {
+    // Continue ramping up if still accelerating
+    setMotorControl(currentCommand);
+  }
   
   // LED flashing when not connected
   if (!isConnected) {
@@ -455,12 +487,6 @@ void loop(){
     }
   } else {
     digitalWrite(LED_PIN, LOW);  // Turn off LED when connected
-  }
-  
-  // Apply motor control when command changes
-  if (currentCommand != lastCommand) {
-    setMotorControl(currentCommand);
-    lastCommand = currentCommand;
   }
   
   uint32_t now = millis();
@@ -477,5 +503,4 @@ void loop(){
       }
     }
   }
-  
 }
