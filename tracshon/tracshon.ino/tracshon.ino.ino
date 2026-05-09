@@ -1,9 +1,15 @@
 #include <NimBLEDevice.h>
 #include <FastLED.h>
+#include <WiFi.h>
+#include <BetterOTA.h>
 
 bool doConnect = false;
 bool isConnected = false;
 uint32_t scanTimeMs = 5000;
+
+// WiFi credentials for OTA
+const char* ssid = "potato";
+const char* password = "potato123";
 
 // RGB LED Configuration
 #define RGB_LED_PIN 14  // D14
@@ -429,6 +435,24 @@ void setup(){
   // Disable BLE library debug output
   esp_log_level_set("*", ESP_LOG_ERROR);
   
+  // Initialize WiFi for OTA
+  Serial.println("Connecting to WiFi...");
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  
+  uint32_t wifiStart = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 10000) {
+    yield();
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("WiFi connected. IP: ");
+    Serial.println(WiFi.localIP());
+    BetterOTA.begin("tracshon", "123456");  // device name and password
+  } else {
+    Serial.println("WiFi connection failed");
+  }
+  
   // Initialize RGB LED
   FastLED.addLeds<WS2812, RGB_LED_PIN, GRB>(leds, NUM_LEDS);
   FastLED.setBrightness(100);
@@ -455,6 +479,9 @@ void loop(){
   static CarCommand lastCommand = STOP;
   static uint32_t lastLedToggle = 0;
   static bool ledState = false;
+  
+  // Handle OTA updates
+  BetterOTA.handle();
   
   yield();  // Feed watchdog
   
