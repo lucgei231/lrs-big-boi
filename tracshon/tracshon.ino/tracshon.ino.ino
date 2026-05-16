@@ -421,7 +421,7 @@ void connectToServer() {
   for (auto chr : chars) {
     if (chr->getUUID().equals(NimBLEUUID((uint16_t)0x2A4D)) && chr->canNotify()) {
       if (chr->subscribe(true, notifyCB)) {
-        Serial.print("Subscribed to Handle: 0x");
+        Serial.print("Found button with UUID: 0x");
         Serial.println(chr->getHandle(), HEX);
         ++subCount;
       } else {
