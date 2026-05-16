@@ -527,9 +527,9 @@ void setup(){
   Serial.println("\n\n=== TRACSHON STARTUP ===");
   Serial.println("Type HELP for commands");
 
-  // Configure watchdog - 10 second timeout
-  esp_task_wdt_init(10, true);
-  esp_task_wdt_add(NULL);
+  // Disable watchdog timer - can cause resets on battery
+  disableCore0WDT();
+  disableCore1WDT();
 
   // Disable BLE library debug output
   esp_log_level_set("*", ESP_LOG_ERROR);
@@ -542,7 +542,7 @@ void setup(){
   
   uint32_t wifiStart = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 10000) {
-    yield();
+    delay(0);
   }
   
   if (WiFi.status() == WL_CONNECTED) {
@@ -553,19 +553,16 @@ void setup(){
     ArduinoOTA.setHostname("tracshon");
     ArduinoOTA.setPassword("123456");
     
-    ArduinoOTA.onStart([]() {
+    ArduinoOTA.onStart([=]() {
       Serial.println("\n[OTA] Update starting...");
-      esp_task_wdt_deinit();  // Disable watchdog during OTA
     });
-    ArduinoOTA.onEnd([]() {
+    ArduinoOTA.onEnd([=]() {
       Serial.println("\n[OTA] Update finished!");
-      esp_task_wdt_init(10, true);  // Re-enable watchdog
-      esp_task_wdt_add(NULL);
     });
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    ArduinoOTA.onProgress([=](unsigned int progress, unsigned int total) {
       Serial.printf("[OTA] Progress: %u%%\r", (progress / (total / 100)));
     });
-    ArduinoOTA.onError([](ota_error_t error) {
+    ArduinoOTA.onError([=](ota_error_t error) {
       Serial.printf("[OTA] Error[%u]: ", error);
       if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
       else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
@@ -573,8 +570,6 @@ void setup(){
       else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
       else if (error == OTA_END_ERROR) Serial.println("End Failed");
       else Serial.println("Unknown");
-      esp_task_wdt_init(10, true);
-      esp_task_wdt_add(NULL);
     });
     ArduinoOTA.begin();
   } else {
@@ -609,9 +604,6 @@ void loop(){
   static uint32_t lastLedToggle = 0;
   static bool ledState = false;
   
-  // Feed watchdog
-  esp_task_wdt_reset();
-  
   // Process serial input for commands
   processSerialInput();
   
@@ -627,14 +619,14 @@ void loop(){
     }
   }
   
-  yield();  // Feed watchdog
+  delay(0);  // Allow task switching
   
   if (doConnect) {
     connectToServer();
-    yield();  // Feed watchdog after connection attempt
+    delay(0);  // Allow task switching after connection attempt
   }
   
-  yield();  // Feed watchdog
+  delay(0);  // Allow task switching
   
   // Update RGB LED status
   updateRGBLED();
