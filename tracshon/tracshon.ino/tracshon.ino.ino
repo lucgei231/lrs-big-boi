@@ -11,6 +11,12 @@ uint32_t scanTimeMs = 5000;
 const char* ssid = "potato";
 const char* password = "potato123";
 
+// OTA mode control
+static bool otaModeActive = false;
+static uint32_t otaModeStart = 0;
+static const uint32_t OTA_MODE_TIMEOUT = 120000;  // 2 minutes
+static String serialBuffer = "";
+
 // RGB LED Configuration
 #define RGB_LED_PIN 14  // D14
 #define NUM_LEDS 12
@@ -429,8 +435,74 @@ void connectToServer() {
   isConnected = true;
 }
 
+void handleSerialCommand(String cmd) {
+  cmd.trim();
+  cmd.toUpperCase();
+  
+  if (cmd == "OTA") {
+    Serial.println("\n=== OTA MODE ACTIVATED ===");
+    Serial.print("WiFi Status: ");
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.print("CONNECTED - IP: ");
+      Serial.println(WiFi.localIP());
+      Serial.println("Listening for OTA updates for 2 minutes...");
+      Serial.println("Use Arduino IDE: Tools -> Port -> Network Ports");
+      Serial.println("or run: python -m esptool --chip esp32 --port <IP_ADDRESS> write_flash ...");
+      otaModeActive = true;
+      otaModeStart = millis();
+    } else {
+      Serial.println("NOT CONNECTED - Cannot enter OTA mode");
+    }
+  }
+  else if (cmd == "STATUS") {
+    Serial.println("\n=== SYSTEM STATUS ===");
+    Serial.print("WiFi: ");
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.print("CONNECTED - IP: ");
+      Serial.println(WiFi.localIP());
+    } else {
+      Serial.println("DISCONNECTED");
+    }
+    Serial.print("BLE: ");
+    Serial.println(isConnected ? "CONNECTED" : "DISCONNECTED");
+    Serial.print("OTA Mode: ");
+    Serial.println(otaModeActive ? "ACTIVE" : "INACTIVE");
+    Serial.print("Current Command: ");
+    Serial.println((int)currentCommand);
+  }
+  else if (cmd == "HELP") {
+    Serial.println("\n=== AVAILABLE COMMANDS ===");
+    Serial.println("OTA     - Enter OTA update mode (2 min timeout)");
+    Serial.println("STATUS  - Show system status");
+    Serial.println("HELP    - Show this help message");
+  }
+  else if (cmd.length() > 0) {
+    Serial.println("Unknown command: " + cmd);
+    Serial.println("Type HELP for available commands");
+  }
+}
+
+void processSerialInput() {
+  while (Serial.available()) {
+    char c = Serial.read();
+    
+    if (c == '\n' || c == '\r') {
+      if (serialBuffer.length() > 0) {
+        handleSerialCommand(serialBuffer);
+        serialBuffer = "";
+      }
+    } else if (c >= 32 && c < 127) {  // Printable characters
+      serialBuffer += c;
+    }
+  }
+}
+
 void setup(){
-  Serial.begin(9600);
+  Serial.begin(115200);  // Faster baud rate for better debugging
+  delay(1000);
+  
+  Serial.println("\n\n=== TRACSHON STARTUP ===");
+  Serial.println("Type HELP for commands");
 
   // Disable BLE library debug output
   esp_log_level_set("*", ESP_LOG_ERROR);
@@ -454,16 +526,22 @@ void setup(){
     ArduinoOTA.setPassword("123456");
     
     ArduinoOTA.onStart([]() {
-      Serial.println("OTA Update starting...");
+      Serial.println("\n[OTA] Update starting...");
     });
     ArduinoOTA.onEnd([]() {
-      Serial.println("\nOTA Update finished!");
+      Serial.println("\n[OTA] Update finished!");
     });
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-      Serial.printf("OTA Progress: %u%%\r", (progress / (total / 100)));
+      Serial.printf("[OTA] Progress: %u%%\r", (progress / (total / 100)));
     });
     ArduinoOTA.onError([](ota_error_t error) {
-      Serial.printf("OTA Error: %u\n", error);
+      Serial.printf("[OTA] Error[%u]: ", error);
+      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+      else if (error == OTA_END_ERROR) Serial.println("End Failed");
+      else Serial.println("Unknown");
     });
     ArduinoOTA.begin();
   } else {
@@ -497,8 +575,20 @@ void loop(){
   static uint32_t lastLedToggle = 0;
   static bool ledState = false;
   
+  // Process serial input for commands
+  processSerialInput();
+  
   // Handle OTA updates
   ArduinoOTA.handle();
+  
+  // Check OTA mode timeout
+  if (otaModeActive) {
+    uint32_t elapsed = millis() - otaModeStart;
+    if (elapsed > OTA_MODE_TIMEOUT) {
+      Serial.println("\n[OTA] Timeout - exiting OTA mode");
+      otaModeActive = false;
+    }
+  }
   
   yield();  // Feed watchdog
   
