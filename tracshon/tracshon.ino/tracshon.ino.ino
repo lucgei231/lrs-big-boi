@@ -24,6 +24,7 @@ CRGB leds[NUM_LEDS];
 
 enum CarCommand : uint8_t { STOP, FORWARD, BACKWARD, LEFT, RIGHT };
 volatile CarCommand currentCommand = STOP;
+volatile CarCommand pendingCommand = STOP;  // Command from BLE callback, applied in main loop
 
 // Motor control pins
 #define MOTOR1_FWD 16   // D16
@@ -351,24 +352,29 @@ void notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic,
   if (release) {
     if (!clickActive) return;
 
+    CarCommand cmd = STOP;
+    
     if (clickGroup == 6 && activeCount == 1 && firstX == 1200 && firstY == 1012) {
-      currentCommand = STOP;
+      cmd = STOP;
     } else if (clickGroup == 7) {
-      currentCommand = STOP;
+      cmd = STOP;
     } else if (clickGroup == 4 || clickGroup == 5) {
-      if (lastX < firstX) currentCommand = LEFT;
-      else if (lastX > firstX) currentCommand = RIGHT;
-      else currentCommand = STOP;
+      if (lastX < firstX) cmd = LEFT;
+      else if (lastX > firstX) cmd = RIGHT;
+      else cmd = STOP;
     } else if (clickGroup == 6) {
-      if (lastY < firstY) currentCommand = FORWARD;
-      else if (lastY > firstY) currentCommand = BACKWARD;
-      else currentCommand = STOP;
+      if (lastY < firstY) cmd = FORWARD;
+      else if (lastY > firstY) cmd = BACKWARD;
+      else cmd = STOP;
     } else {
-      currentCommand = STOP;
+      cmd = STOP;
     }
 
+    // Set pending command - don't call motor functions from callback!
+    pendingCommand = cmd;
+
     Serial.print("CLICK: ");
-    Serial.println((int)currentCommand);
+    Serial.println((int)cmd);
 
     clickActive = false;
     clickGroup = 0;
@@ -469,12 +475,29 @@ void handleSerialCommand(String cmd) {
     Serial.println(otaModeActive ? "ACTIVE" : "INACTIVE");
     Serial.print("Current Command: ");
     Serial.println((int)currentCommand);
+    Serial.print("Free Heap: ");
+    Serial.print(ESP.getFreeHeap());
+    Serial.println(" bytes");
   }
   else if (cmd == "HELP") {
     Serial.println("\n=== AVAILABLE COMMANDS ===");
     Serial.println("OTA     - Enter OTA update mode (2 min timeout)");
     Serial.println("STATUS  - Show system status");
+    Serial.println("WIFI_OFF - Disable WiFi (saves battery)");
+    Serial.println("WIFI_ON  - Enable WiFi");
     Serial.println("HELP    - Show this help message");
+  }
+  else if (cmd == "WIFI_OFF") {
+    Serial.println("Disabling WiFi...");
+    WiFi.mode(WIFI_OFF);
+    Serial.println("WiFi OFF - saves power on battery");
+  }
+  else if (cmd == "WIFI_ON") {
+    Serial.println("Enabling WiFi...");
+    WiFi.mode(WIFI_STA);
+    WiFi.setSleep(WIFI_PS_MIN_MODEM);
+    WiFi.begin(ssid, password);
+    Serial.println("Connecting to WiFi...");
   }
   else if (cmd.length() > 0) {
     Serial.println("Unknown command: " + cmd);
@@ -504,12 +527,17 @@ void setup(){
   Serial.println("\n\n=== TRACSHON STARTUP ===");
   Serial.println("Type HELP for commands");
 
+  // Configure watchdog - 10 second timeout
+  esp_task_wdt_init(10, true);
+  esp_task_wdt_add(NULL);
+
   // Disable BLE library debug output
   esp_log_level_set("*", ESP_LOG_ERROR);
   
   // Initialize WiFi for OTA
   Serial.println("Connecting to WiFi...");
   WiFi.mode(WIFI_STA);
+  WiFi.setSleep(WIFI_PS_MIN_MODEM);  // Reduce power consumption
   WiFi.begin(ssid, password);
   
   uint32_t wifiStart = millis();
@@ -527,9 +555,12 @@ void setup(){
     
     ArduinoOTA.onStart([]() {
       Serial.println("\n[OTA] Update starting...");
+      esp_task_wdt_deinit();  // Disable watchdog during OTA
     });
     ArduinoOTA.onEnd([]() {
       Serial.println("\n[OTA] Update finished!");
+      esp_task_wdt_init(10, true);  // Re-enable watchdog
+      esp_task_wdt_add(NULL);
     });
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
       Serial.printf("[OTA] Progress: %u%%\r", (progress / (total / 100)));
@@ -542,10 +573,13 @@ void setup(){
       else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
       else if (error == OTA_END_ERROR) Serial.println("End Failed");
       else Serial.println("Unknown");
+      esp_task_wdt_init(10, true);
+      esp_task_wdt_add(NULL);
     });
     ArduinoOTA.begin();
   } else {
-    Serial.println("WiFi connection failed");
+    Serial.println("WiFi connection failed - battery mode");
+    WiFi.mode(WIFI_OFF);  // Disable WiFi on battery
   }
   
   // Initialize RGB LED
@@ -575,6 +609,9 @@ void loop(){
   static uint32_t lastLedToggle = 0;
   static bool ledState = false;
   
+  // Feed watchdog
+  esp_task_wdt_reset();
+  
   // Process serial input for commands
   processSerialInput();
   
@@ -602,8 +639,11 @@ void loop(){
   // Update RGB LED status
   updateRGBLED();
   
-  // Apply motor control every frame (for PWM ramp-up)
-  if (currentCommand != lastCommand) {
+  // Apply pending command from BLE callback (safe to call motor functions here)
+  if (pendingCommand != currentCommand) {
+    currentCommand = pendingCommand;
+    setMotorControl(currentCommand);
+  } else if (currentCommand != lastCommand) {
     setMotorControl(currentCommand);
     lastCommand = currentCommand;
   } else if (currentCommand != STOP) {
