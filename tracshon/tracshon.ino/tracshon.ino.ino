@@ -527,10 +527,6 @@ void setup(){
   Serial.println("\n\n=== TRACSHON STARTUP ===");
   Serial.println("Type HELP for commands");
 
-  // Disable watchdog timer - can cause resets on battery
-  disableCore0WDT();
-  disableCore1WDT();
-
   // Disable BLE library debug output
   esp_log_level_set("*", ESP_LOG_ERROR);
   
