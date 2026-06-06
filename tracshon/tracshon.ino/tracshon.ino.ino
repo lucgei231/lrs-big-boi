@@ -424,14 +424,23 @@ void notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic,
     if (!clickActive) return;
 
     CarCommand cmd = STOP;
-
-    // Check if this is a middle-button press without significant swipe
-    // (clickGroup 0 or 6, no big XY movement)
-    bool isMiddleBtn = (clickGroup == 0 || clickGroup == 6);
     bool noSwipe = (abs(lastX - firstX) < 300 && abs(lastY - firstY) < 300);
 
-    if (isMiddleBtn && noSwipe) {
-      // Potential double-press: two middle-button taps within 2 seconds toggles line-follow
+    // Standard command mapping from click group + swipe direction
+    if (clickGroup == 7) {
+      cmd = STOP;
+    } else if (clickGroup == 4 || clickGroup == 5) {
+      if (lastX < firstX) cmd = LEFT;
+      else if (lastX > firstX) cmd = RIGHT;
+      else cmd = STOP;
+    } else if (clickGroup == 6) {
+      if (lastY < firstY) cmd = FORWARD;
+      else if (lastY > firstY) cmd = BACKWARD;
+      else cmd = STOP;
+    }
+
+    // Double-press detection: any two non-swipe STOP presses within 2 seconds toggles line-follow
+    if (cmd == STOP && noSwipe) {
       uint32_t now = millis();
       if (middleDoublePending && (now - lastMiddleReleaseMs < 2000)) {
         lineFollowMode = !lineFollowMode;
@@ -445,19 +454,6 @@ void notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic,
       }
       middleDoublePending = true;
       lastMiddleReleaseMs = now;
-      cmd = STOP;
-    } else if (clickGroup == 7) {
-      cmd = STOP;
-    } else if (clickGroup == 4 || clickGroup == 5) {
-      if (lastX < firstX) cmd = LEFT;
-      else if (lastX > firstX) cmd = RIGHT;
-      else cmd = STOP;
-    } else if (clickGroup == 6) {
-      if (lastY < firstY) cmd = FORWARD;
-      else if (lastY > firstY) cmd = BACKWARD;
-      else cmd = STOP;
-    } else {
-      cmd = STOP;
     }
 
     pendingCommand = cmd;
