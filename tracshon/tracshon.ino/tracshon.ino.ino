@@ -34,7 +34,7 @@ static const uint16_t OBSTACLE_THRESHOLD = 2000;  // Adjust based on testing (0-
 
 // Line-following mode (toggled by double-press middle button)
 static bool lineFollowMode = false;           // OFF by default
-static const uint16_t LINE_THRESHOLD = 1500;  // Sensor value above = on line (dark)
+static uint16_t LINE_THRESHOLD = 1500;  // Sensor value above = on line (dark) - adjustable via THRESH command
 static uint32_t lastMiddleReleaseMs = 0;      // For double-press detection
 static bool middleDoublePending = false;       // Waiting for possible double-press
 static uint32_t lineFollowLastSearchMs = 0;   // For search pattern timing
@@ -187,16 +187,32 @@ static void showScanning(uint8_t frame) {
   }
 }
 
+// Connecting animation: each LED picks a random color from {Red, Yellow, Orange}
+// Colors re-randomize every ~200ms to create a dynamic flicker effect
+static const CRGB CONNECT_COLORS[] = {
+  CRGB::Red,
+  CRGB::Yellow,
+  CRGB::Orange
+};
+static const uint8_t NUM_CONNECT_COLORS = 3;
+
 static void showConnecting(uint8_t frame) {
   uint8_t breath = breathBrightness(frame, 4);
-  uint8_t dim = breath / 3;
-  uint8_t minBright = dim < 24 ? 24 : dim;
-  for (int i = 0; i < NUM_LEDS; i++) {
-    if ((i + frame / 2) % 4 == 0) {
-      leds[i] = CHSV(160, 255, breath);
-    } else {
-      leds[i] = CHSV(160, 255, minBright);
+
+  // Re-randomize colors every 4 frames (~200ms at 50fps)
+  static uint8_t ledColors[NUM_LEDS];
+  static uint8_t lastColorFrame = 255;
+  if (frame - lastColorFrame >= 4) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+      ledColors[i] = random(NUM_CONNECT_COLORS);
     }
+    lastColorFrame = frame;
+  }
+
+  for (int i = 0; i < NUM_LEDS; i++) {
+    CRGB color = CONNECT_COLORS[ledColors[i]];
+    leds[i] = color;
+    leds[i].nscale8_video(breath);
   }
 }
 
@@ -408,23 +424,25 @@ void notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic,
     if (!clickActive) return;
 
     CarCommand cmd = STOP;
-    
-    if (clickGroup == 6 && activeCount == 1 && firstX == 1200 && firstY == 1012) {
-      // Middle button center press - check for double-press to toggle line-follow mode
+
+    // Check if this is a middle-button press without significant swipe
+    // (clickGroup 0 or 6, no big XY movement)
+    bool isMiddleBtn = (clickGroup == 0 || clickGroup == 6);
+    bool noSwipe = (abs(lastX - firstX) < 300 && abs(lastY - firstY) < 300);
+
+    if (isMiddleBtn && noSwipe) {
+      // Potential double-press: two middle-button taps within 2 seconds toggles line-follow
       uint32_t now = millis();
       if (middleDoublePending && (now - lastMiddleReleaseMs < 2000)) {
-        // DOUBLE PRESS detected! Toggle line-follow mode
         lineFollowMode = !lineFollowMode;
         middleDoublePending = false;
-        Serial.print("\n*** LINE FOLLOW MODE: ");
-        Serial.print(lineFollowMode ? "ON" : "OFF");
-        Serial.println(" ***");
+        Serial.print("Line follow mode: ");
+        Serial.println(lineFollowMode ? "ENABLED" : "DISABLED");
         clickActive = false;
         clickGroup = 0;
         activeCount = 0;
-        return;  // Don't set any motor command
+        return;
       }
-      // First press - mark as pending for potential double-press
       middleDoublePending = true;
       lastMiddleReleaseMs = now;
       cmd = STOP;
@@ -442,7 +460,6 @@ void notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic,
       cmd = STOP;
     }
 
-    // Set pending command - don't call motor functions from callback!
     pendingCommand = cmd;
 
     Serial.print("CLICK: ");
@@ -526,28 +543,53 @@ bool isObstacleDetected() {
 }
 
 // Line-following update: called from loop() when lineFollowMode is active.
-// Uses HW-870 analog sensor to follow a dark line on light surface.
-// Returns the CarCommand that should be active (STOP, FORWARD, LEFT, RIGHT).
+// Uses HW-870 IR sensor on D21 to follow a black line on a light surface.
+// HW-870: black absorbs IR → LOW reflection → HIGH analog value
+//         white reflects IR → HIGH reflection → LOW analog value
+// So: sensorVal > LINE_THRESHOLD means we're ON the black line.
+//
+// Single-sensor edge-following algorithm:
+// - On the line: drive FORWARD
+// - Off the line: the line curved away, turn to find it
+//   Start with a small turn, widen the search if line isn't found quickly.
 CarCommand lineFollowUpdate() {
   uint16_t sensorVal = readHW870();
   bool onLine = (sensorVal > LINE_THRESHOLD);
+  uint32_t now = millis();
 
   if (onLine) {
-    // Sensor sees the line -> drive forward
-    lineFollowLastSearchMs = millis();  // Reset search timer
+    // Sensor sees the black line -> drive forward
+    lineFollowLastSearchMs = now;
+    if (lineFollowSearchDir != 0) {
+      lineFollowSearchDir = 0;
+      Serial.println("Line: ON LINE -> forward");
+    }
     return FORWARD;
   }
 
-  // Lost the line -> search pattern to find it again
-  uint32_t now = millis();
-  uint32_t searchElapsed = now - lineFollowLastSearchMs;
+  // Lost the line -> search pattern: sweep to find which way it curved
+  uint32_t lostDuration = now - lineFollowLastSearchMs;
 
-  // Alternate search direction every 300ms
-  if (searchElapsed > 300) {
-    lineFollowSearchDir = -lineFollowSearchDir;
-    lineFollowLastSearchMs = now;
-    Serial.print("Line search: turning ");
-    Serial.println(lineFollowSearchDir > 0 ? "RIGHT" : "LEFT");
+  if (lostDuration < 150) {
+    // Keep current or default search direction (right)
+    if (lineFollowSearchDir == 0) {
+      lineFollowSearchDir = 1;
+      Serial.println("Line: LOST -> searching RIGHT");
+    }
+  } else if (lostDuration < 400) {
+    // Switch direction for wider search
+    if (lineFollowSearchDir > 0) {
+      lineFollowSearchDir = -1;
+      Serial.println("Line: still lost -> searching LEFT");
+    }
+  } else {
+    // Wide sweep: keep alternating
+    if (lostDuration > 650) {
+      lineFollowSearchDir = -lineFollowSearchDir;
+      lineFollowLastSearchMs = now;
+      Serial.print("Line: sweeping -> ");
+      Serial.println(lineFollowSearchDir > 0 ? "RIGHT" : "LEFT");
+    }
   }
 
   return (lineFollowSearchDir > 0) ? RIGHT : LEFT;
@@ -621,6 +663,7 @@ void handleSerialCommand(String cmd) {
     Serial.println("OBSTACLE ON  - Enable obstacle auto-stop");
     Serial.println("OBSTACLE OFF - Disable obstacle auto-stop");
     Serial.println("LINEFOLLOW   - Toggle line-follow mode (or double-press middle ring button)");
+    Serial.println("THRESH <val> - Set line threshold (current: see STATUS)");
     Serial.println("SENSOR  - Read HW-870 sensor once");
     Serial.println("HELP    - Show this help message");
   }
@@ -648,8 +691,18 @@ void handleSerialCommand(String cmd) {
   }
   else if (cmd == "LINEFOLLOW") {
     lineFollowMode = !lineFollowMode;
-    Serial.print("Line Follow Mode: ");
-    Serial.println(lineFollowMode ? "ON" : "OFF");
+    Serial.print("Line follow mode: ");
+    Serial.println(lineFollowMode ? "ENABLED" : "DISABLED");
+  }
+  else if (cmd.startsWith("THRESH ")) {
+    int val = cmd.substring(7).toInt();
+    if (val > 0 && val < 4096) {
+      LINE_THRESHOLD = (uint16_t)val;
+      Serial.print("Line threshold set to: ");
+      Serial.println(LINE_THRESHOLD);
+    } else {
+      Serial.println("Invalid threshold. Use 1-4095 (e.g., THRESH 2000)");
+    }
   }
   else if (cmd == "SENSOR") {
     uint16_t val = readHW870();
@@ -800,31 +853,30 @@ void loop(){
   // Update RGB LED status
   updateRGBLED();
 
-  // Line-following mode: override BLE commands with sensor-driven control
+  // Determine the drive command for this frame
+  CarCommand driveCmd = currentCommand;
+
+  // Line-follow mode: sensor provides the default drive command
   if (lineFollowMode && isConnected) {
-    CarCommand lfCmd = lineFollowUpdate();
-    if (lfCmd != currentCommand) {
-      currentCommand = lfCmd;
-      setMotorControl(currentCommand);
-      lastCommand = lfCmd;
-    } else if (lfCmd != STOP) {
-      // Continue updating line-follow steering
-      setMotorControl(currentCommand);
-    }
+    driveCmd = lineFollowUpdate();
   }
-  // Normal BLE command processing (skipped when line-follow is active)
-  else if (!lineFollowMode) {
-    // Apply pending command from BLE callback (safe to call motor functions here)
-    if (pendingCommand != currentCommand) {
-      currentCommand = pendingCommand;
-      setMotorControl(currentCommand);
-    } else if (currentCommand != lastCommand) {
-      setMotorControl(currentCommand);
-      lastCommand = currentCommand;
-    } else if (currentCommand != STOP) {
-      // Continue ramping up if still accelerating
-      setMotorControl(currentCommand);
-    }
+
+  // BLE ring commands ALWAYS take priority (e.g. STOP button during line-follow)
+  if (pendingCommand != currentCommand) {
+    driveCmd = pendingCommand;
+  }
+
+  // Apply drive command to motors (with ramp-up for sustained commands)
+  if (driveCmd != currentCommand) {
+    currentCommand = driveCmd;
+    setMotorControl(currentCommand);
+    lastCommand = driveCmd;
+  } else if (driveCmd != lastCommand) {
+    setMotorControl(currentCommand);
+    lastCommand = driveCmd;
+  } else if (driveCmd != STOP) {
+    // Continue ramping up / maintaining sustained movement
+    setMotorControl(currentCommand);
   }
   
   // LED flashing when not connected
