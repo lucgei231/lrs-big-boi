@@ -26,6 +26,20 @@ enum CarCommand : uint8_t { STOP, FORWARD, BACKWARD, LEFT, RIGHT };
 volatile CarCommand currentCommand = STOP;
 volatile CarCommand pendingCommand = STOP;  // Command from BLE callback, applied in main loop
 
+// HW-870 IR Obstacle Sensor (analog output)
+#define HW870_PIN 21     // D21 - analog input
+static uint16_t hw870Raw = 0;
+static bool obstacleDetectionEnabled = false;
+static const uint16_t OBSTACLE_THRESHOLD = 2000;  // Adjust based on testing (0-4095)
+
+// Line-following mode (toggled by double-press middle button)
+static bool lineFollowMode = false;           // OFF by default
+static const uint16_t LINE_THRESHOLD = 1500;  // Sensor value above = on line (dark)
+static uint32_t lastMiddleReleaseMs = 0;      // For double-press detection
+static bool middleDoublePending = false;       // Waiting for possible double-press
+static uint32_t lineFollowLastSearchMs = 0;   // For search pattern timing
+static int8_t lineFollowSearchDir = 1;         // 1 = right, -1 = left (search direction)
+
 // Motor control pins
 #define MOTOR1_FWD 16   // D16
 #define MOTOR1_REV 17   // D17
@@ -237,6 +251,34 @@ static void showCommandStatus(CarCommand cmd, uint8_t frame) {
   }
 }
 
+// Line-follow mode LED pattern: white chasing ring when following line
+static void showLineFollowMode(uint8_t frame) {
+  bool onLine = (hw870Raw > LINE_THRESHOLD);
+  uint8_t breath = breathBrightness(frame, 0);
+
+  if (onLine) {
+    // On line: bright white chasing pattern
+    int head = frame % NUM_LEDS;
+    for (int i = 0; i < NUM_LEDS; i++) {
+      int delta = (i + NUM_LEDS - head) % NUM_LEDS;
+      if (delta == 0) {
+        leds[i] = CRGB::White;
+      } else if (delta < 3) {
+        leds[i] = CRGB::White;
+        leds[i].nscale8_video(128);
+      } else {
+        leds[i] = CRGB::White;
+        leds[i].nscale8_video(40);
+      }
+    }
+  } else {
+    // Searching for line: pulsing dim white
+    for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i] = CHSV(0, 0, breath / 3);  // Dim white pulsing
+    }
+  }
+}
+
 void updateRGBLED() {
   static uint32_t lastUpdate = 0;
   static uint8_t animFrame = 0;
@@ -251,6 +293,8 @@ void updateRGBLED() {
     showScanning(animFrame);
   } else if (doConnect && !isConnected) {
     showConnecting(animFrame);
+  } else if (lineFollowMode) {
+    showLineFollowMode(animFrame);
   } else if (isConnected) {
     showCommandStatus(currentCommand, animFrame);
   } else {
@@ -267,6 +311,17 @@ static inline int16_t u16le_to_i16(uint8_t lo, uint8_t hi) {
 }
 
 void setMotorControl(CarCommand cmd) {
+  // Obstacle detection auto-stop: override any movement command
+  if (obstacleDetectionEnabled && cmd != STOP && isObstacleDetected()) {
+    cmd = STOP;
+    static uint32_t lastObstacleMsg = 0;
+    if (millis() - lastObstacleMsg > 1000) {
+      Serial.print("HW-870 OBSTACLE! Sensor: ");
+      Serial.println(hw870Raw);
+      lastObstacleMsg = millis();
+    }
+  }
+
   if (cmd != motorRampTarget) {
     motorRampTarget = cmd;
     motorRampStart = millis();
@@ -355,6 +410,23 @@ void notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic,
     CarCommand cmd = STOP;
     
     if (clickGroup == 6 && activeCount == 1 && firstX == 1200 && firstY == 1012) {
+      // Middle button center press - check for double-press to toggle line-follow mode
+      uint32_t now = millis();
+      if (middleDoublePending && (now - lastMiddleReleaseMs < 2000)) {
+        // DOUBLE PRESS detected! Toggle line-follow mode
+        lineFollowMode = !lineFollowMode;
+        middleDoublePending = false;
+        Serial.print("\n*** LINE FOLLOW MODE: ");
+        Serial.print(lineFollowMode ? "ON" : "OFF");
+        Serial.println(" ***");
+        clickActive = false;
+        clickGroup = 0;
+        activeCount = 0;
+        return;  // Don't set any motor command
+      }
+      // First press - mark as pending for potential double-press
+      middleDoublePending = true;
+      lastMiddleReleaseMs = now;
       cmd = STOP;
     } else if (clickGroup == 7) {
       cmd = STOP;
@@ -441,6 +513,53 @@ void connectToServer() {
   isConnected = true;
 }
 
+// Read HW-870 IR obstacle sensor (analog value 0-4095)
+// Higher value = closer obstacle (more IR reflected back)
+uint16_t readHW870() {
+  hw870Raw = analogRead(HW870_PIN);
+  return hw870Raw;
+}
+
+// Check if obstacle is too close (returns true if blocked)
+bool isObstacleDetected() {
+  return (readHW870() > OBSTACLE_THRESHOLD);
+}
+
+// Line-following update: called from loop() when lineFollowMode is active.
+// Uses HW-870 analog sensor to follow a dark line on light surface.
+// Returns the CarCommand that should be active (STOP, FORWARD, LEFT, RIGHT).
+CarCommand lineFollowUpdate() {
+  uint16_t sensorVal = readHW870();
+  bool onLine = (sensorVal > LINE_THRESHOLD);
+
+  if (onLine) {
+    // Sensor sees the line -> drive forward
+    lineFollowLastSearchMs = millis();  // Reset search timer
+    return FORWARD;
+  }
+
+  // Lost the line -> search pattern to find it again
+  uint32_t now = millis();
+  uint32_t searchElapsed = now - lineFollowLastSearchMs;
+
+  // Alternate search direction every 300ms
+  if (searchElapsed > 300) {
+    lineFollowSearchDir = -lineFollowSearchDir;
+    lineFollowLastSearchMs = now;
+    Serial.print("Line search: turning ");
+    Serial.println(lineFollowSearchDir > 0 ? "RIGHT" : "LEFT");
+  }
+
+  return (lineFollowSearchDir > 0) ? RIGHT : LEFT;
+}
+
+// Clear stale double-press pending state (call from loop)
+void updateDoublePressTimeout() {
+  if (middleDoublePending && (millis() - lastMiddleReleaseMs > 2000)) {
+    middleDoublePending = false;
+  }
+}
+
 void handleSerialCommand(String cmd) {
   cmd.trim();
   cmd.toUpperCase();
@@ -475,6 +594,20 @@ void handleSerialCommand(String cmd) {
     Serial.println(otaModeActive ? "ACTIVE" : "INACTIVE");
     Serial.print("Current Command: ");
     Serial.println((int)currentCommand);
+    Serial.print("HW-870 Sensor (D21): ");
+    Serial.print(readHW870());
+    Serial.print(" / 4095  (Threshold: ");
+    Serial.print(OBSTACLE_THRESHOLD);
+    Serial.println(")");
+    Serial.print("Line Follow Mode: ");
+    Serial.print(lineFollowMode ? "ON" : "OFF");
+    Serial.print("  (Line Threshold: ");
+    Serial.print(LINE_THRESHOLD);
+    Serial.println(")");
+    Serial.print("Obstacle Detection: ");
+    Serial.println(obstacleDetectionEnabled ? "ON" : "OFF");
+    Serial.print("Obstacle: ");
+    Serial.println(isObstacleDetected() ? "DETECTED!" : "Clear");
     Serial.print("Free Heap: ");
     Serial.print(ESP.getFreeHeap());
     Serial.println(" bytes");
@@ -485,6 +618,10 @@ void handleSerialCommand(String cmd) {
     Serial.println("STATUS  - Show system status");
     Serial.println("WIFI_OFF - Disable WiFi (saves battery)");
     Serial.println("WIFI_ON  - Enable WiFi");
+    Serial.println("OBSTACLE ON  - Enable obstacle auto-stop");
+    Serial.println("OBSTACLE OFF - Disable obstacle auto-stop");
+    Serial.println("LINEFOLLOW   - Toggle line-follow mode (or double-press middle ring button)");
+    Serial.println("SENSOR  - Read HW-870 sensor once");
     Serial.println("HELP    - Show this help message");
   }
   else if (cmd == "WIFI_OFF") {
@@ -498,6 +635,34 @@ void handleSerialCommand(String cmd) {
     WiFi.setSleep(WIFI_PS_MIN_MODEM);
     WiFi.begin(ssid, password);
     Serial.println("Connecting to WiFi...");
+  }
+  else if (cmd == "OBSTACLE ON") {
+    obstacleDetectionEnabled = true;
+    Serial.print("Obstacle Detection ENABLED (Threshold: ");
+    Serial.print(OBSTACLE_THRESHOLD);
+    Serial.println(")");
+  }
+  else if (cmd == "OBSTACLE OFF") {
+    obstacleDetectionEnabled = false;
+    Serial.println("Obstacle Detection DISABLED");
+  }
+  else if (cmd == "LINEFOLLOW") {
+    lineFollowMode = !lineFollowMode;
+    Serial.print("Line Follow Mode: ");
+    Serial.println(lineFollowMode ? "ON" : "OFF");
+  }
+  else if (cmd == "SENSOR") {
+    uint16_t val = readHW870();
+    Serial.print("HW-870 Sensor (D21): ");
+    Serial.print(val);
+    Serial.print(" / 4095  ->  ");
+    if (val > OBSTACLE_THRESHOLD) {
+      Serial.println("OBSTACLE DETECTED");
+    } else if (val > OBSTACLE_THRESHOLD / 2) {
+      Serial.println("Object nearby");
+    } else {
+      Serial.println("Clear");
+    }
   }
   else if (cmd.length() > 0) {
     Serial.println("Unknown command: " + cmd);
@@ -579,6 +744,11 @@ void setup(){
   leds[0] = COLOR_OFF;
   FastLED.show();
   
+  // Initialize HW-870 IR sensor (analog input on D21)
+  pinMode(HW870_PIN, INPUT);
+  Serial.print("HW-870 sensor initialized on pin D");
+  Serial.println(HW870_PIN);
+
   // Initialize motor control pins
   pinMode(MOTOR1_FWD, OUTPUT);
   pinMode(MOTOR1_REV, OUTPUT);
@@ -624,19 +794,37 @@ void loop(){
   
   delay(0);  // Allow task switching
   
+  // Clear stale double-press pending after 2s timeout
+  updateDoublePressTimeout();
+
   // Update RGB LED status
   updateRGBLED();
-  
-  // Apply pending command from BLE callback (safe to call motor functions here)
-  if (pendingCommand != currentCommand) {
-    currentCommand = pendingCommand;
-    setMotorControl(currentCommand);
-  } else if (currentCommand != lastCommand) {
-    setMotorControl(currentCommand);
-    lastCommand = currentCommand;
-  } else if (currentCommand != STOP) {
-    // Continue ramping up if still accelerating
-    setMotorControl(currentCommand);
+
+  // Line-following mode: override BLE commands with sensor-driven control
+  if (lineFollowMode && isConnected) {
+    CarCommand lfCmd = lineFollowUpdate();
+    if (lfCmd != currentCommand) {
+      currentCommand = lfCmd;
+      setMotorControl(currentCommand);
+      lastCommand = lfCmd;
+    } else if (lfCmd != STOP) {
+      // Continue updating line-follow steering
+      setMotorControl(currentCommand);
+    }
+  }
+  // Normal BLE command processing (skipped when line-follow is active)
+  else if (!lineFollowMode) {
+    // Apply pending command from BLE callback (safe to call motor functions here)
+    if (pendingCommand != currentCommand) {
+      currentCommand = pendingCommand;
+      setMotorControl(currentCommand);
+    } else if (currentCommand != lastCommand) {
+      setMotorControl(currentCommand);
+      lastCommand = currentCommand;
+    } else if (currentCommand != STOP) {
+      // Continue ramping up if still accelerating
+      setMotorControl(currentCommand);
+    }
   }
   
   // LED flashing when not connected
