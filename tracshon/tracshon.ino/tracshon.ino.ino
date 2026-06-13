@@ -2,6 +2,14 @@
 #include <FastLED.h>
 #include <WiFi.h>
 #include <ArduinoOTA.h>
+#include <WebServer.h>
+
+// Web command queue (set from handlers, consumed in loop)
+static CarCommand webPendingCmd = STOP;
+static bool webHasCmd = false;
+
+// User-adjustable motor speed (0-255), set via web UI
+static uint8_t userMotorSpeed = 255;
 
 bool doConnect = false;
 bool isConnected = false;
@@ -352,12 +360,13 @@ void setMotorControl(CarCommand cmd) {
     motorPWM = 0;
   }
 
-  // Ramp up over 200ms
+  // Ramp up over 200ms to user-set speed (not hardcoded 255)
   uint32_t elapsed = millis() - motorRampStart;
+  uint8_t targetPWM = userMotorSpeed;
   if (elapsed < 200) {
-    motorPWM = (uint8_t)((elapsed * 255) / 200);
+    motorPWM = (uint8_t)((elapsed * targetPWM) / 200);
   } else {
-    motorPWM = 255;  // Full power
+    motorPWM = targetPWM;
   }
 
   switch(cmd) {
@@ -431,6 +440,253 @@ void stopMotorsRaw() {
   digitalWrite(MOTOR2_FWD, LOW);
   digitalWrite(MOTOR2_REV, LOW);
 }
+
+// ─── Web Server ──────────────────────────────────────────────────────────────
+
+WebServer server(80);
+
+static const char WEB_PAGE[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>TRACSHON</title>
+<style>
+:root{--bg:#0a0a1e;--card:rgba(255,255,255,.04);--border:rgba(255,255,255,.08);--text:#c8c8d0;--accent:#7c6ff7;--danger:#f7546e;--green:#4ade80;--warn:#facc15}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;min-height:100vh;padding:12px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.header{text-align:center}
+.header h1{font-size:2.2em;font-weight:800;background:linear-gradient(135deg,#7c6ff7,#c084fc,#f7546e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.header .ip{font-size:.7em;color:#666;margin-top:2px}
+.card{background:var(--card);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid var(--border);border-radius:18px;padding:16px;width:100%;max-width:400px}
+.card-title{font-size:.7em;text-transform:uppercase;letter-spacing:3px;color:#666;margin-bottom:12px}
+/* D-Pad */
+.dpad{display:grid;grid-template:50px 50px 50px/50px 50px 50px;gap:6px;justify-content:center;margin:8px 0}
+.dpad button{border:none;border-radius:14px;background:rgba(255,255,255,.06);color:#999;font-size:1.3em;cursor:pointer;transition:all .12s;touch-action:manipulation;display:flex;align-items:center;justify-content:center;outline:none;-webkit-tap-highlight-color:transparent}
+.dpad button:active,.dpad button.pressed{background:var(--accent);color:#fff;transform:scale(.9);box-shadow:0 0 30px rgba(124,111,247,.5)}
+.dpad .up{grid-area:1/2}
+.dpad .left{grid-area:2/1}
+.dpad .stop{grid-area:2/2;background:rgba(255,255,255,.12);font-size:1.8em;border-radius:50%}
+.dpad .stop:active,.dpad button.stop.pressed{background:var(--danger);box-shadow:0 0 30px rgba(247,84,110,.5)}
+.dpad .right{grid-area:2/3}
+.dpad .down{grid-area:3/2}
+/* Speed row */
+.speed-row{display:flex;align-items:center;gap:12px}
+.speed-row input[type=range]{flex:1;accent-color:var(--accent);height:6px}
+.speed-row .val{font-weight:700;color:var(--accent);min-width:32px;text-align:center;font-size:.9em}
+/* Toggle */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0}
+.toggle-row span{font-size:.9em}
+.toggle{position:relative;width:52px;height:28px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,.1);border-radius:28px;transition:.3s}
+.toggle .slider::before{content:'';position:absolute;height:22px;width:22px;left:3px;bottom:3px;background:#666;border-radius:50%;transition:.3s}
+.toggle input:checked+.slider{background:var(--accent)}
+.toggle input:checked+.slider::before{transform:translateX(24px);background:#fff}
+/* Sensor gauge */
+.gauge-wrap{text-align:center}
+.gauge-val{font-size:3em;font-weight:800;background:linear-gradient(180deg,#fff,#7c6ff7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.gauge-bar{height:8px;border-radius:4px;background:rgba(255,255,255,.08);margin-top:6px;overflow:hidden}
+.gauge-bar .fill{height:100%;border-radius:4px;transition:width .3s;background:linear-gradient(90deg,var(--green),var(--warn),var(--danger))}
+.gauge-label{font-size:.65em;color:#555;margin-top:4px}
+/* Status dots */
+.status-row{display:flex;gap:16px;justify-content:center}
+.status-dot{display:flex;align-items:center;gap:6px;font-size:.75em}
+.status-dot .dot{width:9px;height:9px;border-radius:50%}
+.dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
+.dot.off{background:#444}
+/* Buttons */
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{padding:8px 16px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.04);color:var(--text);font-size:.8em;cursor:pointer;transition:.15s;touch-action:manipulation}
+.btn:active{background:var(--accent);border-color:var(--accent);color:#fff}
+</style>
+</head><body>
+<div class="header">
+<h1>TRACSHON</h1>
+<div class="ip" id="ip"></div>
+</div>
+
+<div class="card">
+<div class="card-title">Control</div>
+<div class="dpad" id="dpad">
+<button class="up" ontouchstart="cmd('forward')" onmousedown="cmd('forward')" ontouchend="clr()" onmouseup="clr()" ontouchcancel="clr()">▲</button>
+<button class="left" ontouchstart="cmd('left')" onmousedown="cmd('left')" ontouchend="clr()" onmouseup="clr()" ontouchcancel="clr()">◀</button>
+<button class="stop" ontouchstart="cmd('stop')" onmousedown="cmd('stop')" ontouchend="clr()" onmouseup="clr()">■</button>
+<button class="right" ontouchstart="cmd('right')" onmousedown="cmd('right')" ontouchend="clr()" onmouseup="clr()" ontouchcancel="clr()">▶</button>
+<button class="down" ontouchstart="cmd('backward')" onmousedown="cmd('backward')" ontouchend="clr()" onmouseup="clr()" ontouchcancel="clr()">▼</button>
+</div>
+<div class="speed-row" style="margin-top:10px">
+<span style="font-size:.7em;color:#666">SPD</span>
+<input type="range" id="speed" min="80" max="255" value="255" oninput="setSpeed(this.value)">
+<span class="val" id="speedVal">255</span>
+</div>
+</div>
+
+<div class="card">
+<div class="card-title">Line Follow</div>
+<div class="toggle-row">
+<span>Line Follow Mode</span>
+<label class="toggle"><input type="checkbox" id="lfToggle" onchange="toggleLF()"><span class="slider"></span></label>
+</div>
+<div class="speed-row" style="margin-top:8px">
+<span style="font-size:.7em;color:#666">THR</span>
+<input type="range" id="threshold" min="200" max="3800" value="1500" oninput="setThreshold(this.value)">
+<span class="val" id="threshVal">1500</span>
+</div>
+</div>
+
+<div class="card">
+<div class="card-title">Obstacle Detection</div>
+<div class="toggle-row">
+<span>Auto-Stop on Obstacle</span>
+<label class="toggle"><input type="checkbox" id="obsToggle" onchange="toggleObstacle()"><span class="slider"></span></label>
+</div>
+</div>
+
+<div class="card">
+<div class="card-title">Sensor</div>
+<div class="gauge-wrap">
+<div class="gauge-val" id="sensorVal">--</div>
+<div class="gauge-bar"><div class="fill" id="sensorFill" style="width:0%"></div></div>
+<div class="gauge-label">HW-870 IR · D21 · 0–4095</div>
+</div>
+<div class="status-row" style="margin-top:12px">
+<div class="status-dot"><div class="dot off" id="bleDot"></div>BLE</div>
+<div class="status-dot"><div class="dot off" id="wifiDot"></div>WiFi</div>
+<div class="status-dot"><div class="dot off" id="lfDot"></div>Line</div>
+</div>
+</div>
+
+<div class="card">
+<div class="btn-row">
+<button class="btn" onclick="refresh()">Refresh</button>
+<button class="btn" onclick="cmd('ota')" style="border-color:var(--warn);color:var(--warn)">OTA Mode</button>
+</div>
+</div>
+
+<script>
+const API='';
+function post(url){fetch(url,{method:'POST'}).catch(()=>{})}
+function cmd(c){
+  const btns=document.querySelectorAll('.dpad button');
+  btns.forEach(b=>b.classList.remove('pressed'));
+  if(c==='stop'){post('/api/stop');document.querySelector('.dpad .stop').classList.add('pressed')}
+  else if(c==='forward'){post('/api/forward');document.querySelector('.dpad .up').classList.add('pressed')}
+  else if(c==='backward'){post('/api/backward');document.querySelector('.dpad .down').classList.add('pressed')}
+  else if(c==='left'){post('/api/left');document.querySelector('.dpad .left').classList.add('pressed')}
+  else if(c==='right'){post('/api/right');document.querySelector('.dpad .right').classList.add('pressed')}
+  else if(c==='ota'){post('/api/ota')}
+}
+function clr(){document.querySelectorAll('.dpad button').forEach(b=>b.classList.remove('pressed'))}
+function setSpeed(v){document.getElementById('speedVal').textContent=v;post('/api/speed?value='+v)}
+function setThreshold(v){document.getElementById('threshVal').textContent=v;post('/api/threshold?value='+v)}
+function toggleLF(){post('/api/linefollow')}
+function toggleObstacle(){post('/api/obstacle')}
+async function refresh(){
+  try{
+    const r=await fetch('/api/status');const s=await r.json();
+    document.getElementById('sensorVal').textContent=s.sensor;
+    document.getElementById('sensorFill').style.width=(s.sensor/4095*100)+'%';
+    document.getElementById('bleDot').className='dot '+(s.ble?'on':'off');
+    document.getElementById('wifiDot').className='dot '+(s.wifi?'on':'off');
+    document.getElementById('lfDot').className='dot '+(s.linefollow?'on':'off');
+    document.getElementById('lfToggle').checked=s.linefollow;
+    document.getElementById('obsToggle').checked=s.obstacle;
+    if(!document.getElementById('threshold').matches(':active')){
+      document.getElementById('threshold').value=s.threshold;
+      document.getElementById('threshVal').textContent=s.threshold;
+    }
+    if(!document.getElementById('speed').matches(':active')){
+      document.getElementById('speed').value=s.speed;
+      document.getElementById('speedVal').textContent=s.speed;
+    }
+    document.getElementById('ip').textContent=s.ip;
+  }catch(e){}
+}
+setInterval(refresh,500);
+refresh();
+</script>
+</body></html>
+)rawliteral";
+
+// ─── Web API Handlers ────────────────────────────────────────────────────────
+
+void handleRoot() { server.send(200, "text/html", WEB_PAGE); }
+
+void handleStatus() {
+  String json = "{";
+  json += "\"sensor\":" + String(readHW870());
+  json += ",\"threshold\":" + String(LINE_THRESHOLD);
+  json += ",\"linefollow\":" + String(lineFollowMode ? "true" : "false");
+  json += ",\"obstacle\":" + String(obstacleDetectionEnabled ? "true" : "false");
+  json += ",\"ble\":" + String(isConnected ? "true" : "false");
+  json += ",\"wifi\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false");
+  json += ",\"cmd\":" + String((int)currentCommand);
+  json += ",\"speed\":" + String(userMotorSpeed);
+  json += ",\"ip\":\"" + WiFi.localIP().toString() + "\"";
+  json += "}";
+  server.send(200, "application/json", json);
+}
+
+void handleForward()  { webPendingCmd = FORWARD;  webHasCmd = true; server.send(200); }
+void handleBackward() { webPendingCmd = BACKWARD; webHasCmd = true; server.send(200); }
+void handleLeft()     { webPendingCmd = LEFT;     webHasCmd = true; server.send(200); }
+void handleRight()    { webPendingCmd = RIGHT;    webHasCmd = true; server.send(200); }
+void handleStop()     { webPendingCmd = STOP;     webHasCmd = true; server.send(200); }
+
+void handleLineFollow() {
+  lineFollowMode = !lineFollowMode;
+  lfLastDir = 'S';
+  Serial.print("Web: line follow "); Serial.println(lineFollowMode ? "ON" : "OFF");
+  server.send(200);
+}
+void handleObstacle() {
+  obstacleDetectionEnabled = !obstacleDetectionEnabled;
+  Serial.print("Web: obstacle detection "); Serial.println(obstacleDetectionEnabled ? "ON" : "OFF");
+  server.send(200);
+}
+void handleThreshold() {
+  if (server.hasArg("value")) {
+    int v = server.arg("value").toInt();
+    if (v > 0 && v < 4096) { LINE_THRESHOLD = (uint16_t)v; }
+  }
+  server.send(200);
+}
+void handleSpeed() {
+  if (server.hasArg("value")) {
+    int v = server.arg("value").toInt();
+    if (v >= 60 && v <= 255) { userMotorSpeed = (uint8_t)v; }
+  }
+  server.send(200);
+}
+void handleSensor() { server.send(200, "text/plain", String(readHW870())); }
+
+void handleOtaWeb() {
+  otaModeActive = true;
+  otaModeStart = millis();
+  Serial.println("Web: OTA mode activated");
+  server.send(200, "text/plain", "OTA mode active for 2 minutes. IP: " + WiFi.localIP().toString());
+}
+
+void setupWebServer() {
+  server.on("/", handleRoot);
+  server.on("/api/status", handleStatus);
+  server.on("/api/forward", HTTP_POST, handleForward);
+  server.on("/api/backward", HTTP_POST, handleBackward);
+  server.on("/api/left", HTTP_POST, handleLeft);
+  server.on("/api/right", HTTP_POST, handleRight);
+  server.on("/api/stop", HTTP_POST, handleStop);
+  server.on("/api/linefollow", HTTP_POST, handleLineFollow);
+  server.on("/api/obstacle", HTTP_POST, handleObstacle);
+  server.on("/api/threshold", HTTP_POST, handleThreshold);
+  server.on("/api/speed", HTTP_POST, handleSpeed);
+  server.on("/api/sensor", handleSensor);
+  server.on("/api/ota", HTTP_POST, handleOtaWeb);
+  server.begin();
+  Serial.print("Web UI: http://");
+  Serial.println(WiFi.localIP());
+}
+
+// ─── BLE Notify Callback ─────────────────────────────────────────────────────
 
 void notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic,
               uint8_t* pData, size_t length, bool isNotify) {
@@ -576,7 +832,6 @@ bool isObstacleDetected() {
   return (readHW870() > OBSTACLE_THRESHOLD);
 }
 
-// Line-following update: called from loop() when lineFollowMode is active.
 // Line-following motor control — called directly from loop() when lineFollowMode is active.
 // Uses HW-870 IR sensor on D21 with edge-tracking:
 // HW-870: black absorbs IR → LOW reflection → HIGH analog value
@@ -596,40 +851,49 @@ void lineFollowMotors() {
   bool onLine = (sensorVal > LINE_THRESHOLD);
   uint32_t now = millis();
 
+  // Non-blocking direction-change state: 0=cruise, 1=brake
+  static uint8_t lfPhase = 0;
+  static uint32_t lfPhaseStart = 0;
+
   if (onLine) {
     // ON dark line → car is too far toward the line → correct AWAY (right motor faster = turn left)
     if (lfLastDir != 'L') {
-      // Direction change: brief stop + burst
       lfLastDir = 'L';
-      lfBurstStart = now;
+      lfPhase = 1;
+      lfPhaseStart = now;
       stopMotorsRaw();
-      delay(10);
       setMotorsRaw(LINE_CORRECT_SLOW, false, LINE_FORWARD_SPEED, false);
       Serial.println("Line: edge L");
-    } else if (now - lfBurstStart < LINE_BURST_MS) {
-      // Still in burst phase
-      setMotorsRaw(LINE_CORRECT_SLOW, false, LINE_FORWARD_SPEED, false);
     } else {
-      // Cruise: gentle left correction
-      setMotorsRaw(LINE_CORRECT_SLOW, false, LINE_CORRECT_FAST, false);
+      lfPhase = 0;
+      if (now - lfBurstStart < LINE_BURST_MS) {
+        setMotorsRaw(LINE_CORRECT_SLOW, false, LINE_FORWARD_SPEED, false);
+      } else {
+        setMotorsRaw(LINE_CORRECT_SLOW, false, LINE_CORRECT_FAST, false);
+      }
     }
   } else {
     // OFF line → car drifted away → correct TOWARD line (left motor faster = turn right)
     if (lfLastDir != 'R') {
-      // Direction change: brief stop + burst
       lfLastDir = 'R';
-      lfBurstStart = now;
+      lfPhase = 1;
+      lfPhaseStart = now;
       stopMotorsRaw();
-      delay(10);
       setMotorsRaw(LINE_FORWARD_SPEED, false, LINE_CORRECT_SLOW, false);
       Serial.println("Line: edge R");
-    } else if (now - lfBurstStart < LINE_BURST_MS) {
-      // Still in burst phase
-      setMotorsRaw(LINE_FORWARD_SPEED, false, LINE_CORRECT_SLOW, false);
     } else {
-      // Cruise: gentle right correction
-      setMotorsRaw(LINE_CORRECT_FAST, false, LINE_CORRECT_SLOW, false);
+      lfPhase = 0;
+      if (now - lfBurstStart < LINE_BURST_MS) {
+        setMotorsRaw(LINE_FORWARD_SPEED, false, LINE_CORRECT_SLOW, false);
+      } else {
+        setMotorsRaw(LINE_CORRECT_FAST, false, LINE_CORRECT_SLOW, false);
+      }
     }
+  }
+  // After brake phase, record burst start for next call
+  if (lfPhase == 1) {
+    lfBurstStart = now;
+    lfPhase = 0;
   }
 }
 
@@ -777,8 +1041,9 @@ void processSerialInput() {
 }
 
 void setup(){
-  Serial.begin(115200);  // Faster baud rate for better debugging
-  delay(1000);
+  Serial.begin(115200);
+  // Give serial a moment without blocking — just a few yield()s
+  for (int i = 0; i < 50; i++) { yield(); }
   
   Serial.println("\n\n=== TRACSHON STARTUP ===");
   Serial.println("Type HELP for commands");
@@ -794,7 +1059,7 @@ void setup(){
   
   uint32_t wifiStart = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 10000) {
-    delay(0);
+    yield();
   }
   
   if (WiFi.status() == WL_CONNECTED) {
@@ -824,11 +1089,13 @@ void setup(){
       else Serial.println("Unknown");
     });
     ArduinoOTA.begin();
+    // Start web server (only if WiFi connected)
+    setupWebServer();
   } else {
     Serial.println("WiFi connection failed - battery mode");
     WiFi.mode(WIFI_OFF);  // Disable WiFi on battery
   }
-  
+
   // Initialize RGB LED
   FastLED.addLeds<WS2812, RGB_LED_PIN, GRB>(leds, NUM_LEDS);
   FastLED.setBrightness(100);
@@ -860,13 +1127,16 @@ void loop(){
   static CarCommand lastCommand = STOP;
   static uint32_t lastLedToggle = 0;
   static bool ledState = false;
-  
+
+  // Serve web clients (non-blocking — processes one request per call)
+  server.handleClient();
+
   // Process serial input for commands
   processSerialInput();
-  
+
   // Handle OTA updates
   ArduinoOTA.handle();
-  
+
   // Check OTA mode timeout
   if (otaModeActive) {
     uint32_t elapsed = millis() - otaModeStart;
@@ -875,16 +1145,16 @@ void loop(){
       otaModeActive = false;
     }
   }
-  
-  delay(0);  // Allow task switching
-  
+
+  yield();  // Allow FreeRTOS task switching
+
   if (doConnect) {
     connectToServer();
-    delay(0);  // Allow task switching after connection attempt
+    yield();
   }
-  
-  delay(0);  // Allow task switching
-  
+
+  yield();
+
   // Clear stale double-press pending after 2s timeout
   updateDoublePressTimeout();
 
@@ -894,30 +1164,47 @@ void loop(){
   // Determine the drive command for this frame
   CarCommand driveCmd = currentCommand;
 
-  // Line-follow mode: sensor provides the default drive command
-  if (lineFollowMode && isConnected) {
-    driveCmd = lineFollowUpdate();
+  // Check for fresh web command (same priority as BLE)
+  bool webOverride = false;
+  if (webHasCmd) {
+    webHasCmd = false;
+    driveCmd = webPendingCmd;
+    webOverride = true;
+    lfLastDir = 'S';  // Reset line-follow burst tracking
   }
 
-  // BLE ring commands take priority (e.g. STOP button during line-follow)
-  // Only override when a genuinely new command arrived from the ring,
-  // not a stale one from a previous event.
+  // Check for fresh BLE ring command (takes priority over everything)
+  bool bleOverride = false;
   if (hasNewCommand) {
     hasNewCommand = false;
     driveCmd = pendingCommand;
+    bleOverride = true;
+    lfLastDir = 'S';  // Reset line-follow burst tracking so it restarts cleanly
   }
 
-  // Apply drive command to motors (with ramp-up for sustained commands)
-  if (driveCmd != currentCommand) {
-    currentCommand = driveCmd;
-    setMotorControl(currentCommand);
-    lastCommand = driveCmd;
-  } else if (driveCmd != lastCommand) {
-    setMotorControl(currentCommand);
-    lastCommand = driveCmd;
-  } else if (driveCmd != STOP) {
-    // Continue ramping up / maintaining sustained movement
-    setMotorControl(currentCommand);
+  // Apply motors: line-follow uses proportional steering directly;
+  // everything else goes through setMotorControl()
+  if (lineFollowMode && isConnected && !webOverride && !bleOverride) {
+    // Sensor drives motors directly — both always forward, steering by speed diff
+    lineFollowMotors();
+    // Keep currentCommand synced for status display
+    if (currentCommand != FORWARD) {
+      currentCommand = FORWARD;
+      lastCommand = FORWARD;
+    }
+  } else {
+    // BLE command, web command, or normal remote-control mode
+    if (driveCmd != currentCommand) {
+      currentCommand = driveCmd;
+      setMotorControl(currentCommand);
+      lastCommand = driveCmd;
+    } else if (driveCmd != lastCommand) {
+      setMotorControl(currentCommand);
+      lastCommand = driveCmd;
+    } else if (driveCmd != STOP) {
+      // Continue ramping up / maintaining sustained movement
+      setMotorControl(currentCommand);
+    }
   }
   
   // LED flashing when not connected
