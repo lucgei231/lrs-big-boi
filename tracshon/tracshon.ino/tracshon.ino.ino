@@ -25,6 +25,7 @@ CRGB leds[NUM_LEDS];
 enum CarCommand : uint8_t { STOP, FORWARD, BACKWARD, LEFT, RIGHT };
 volatile CarCommand currentCommand = STOP;
 volatile CarCommand pendingCommand = STOP;  // Command from BLE callback, applied in main loop
+static volatile bool hasNewCommand = false;     // True when BLE callback sets a fresh command
 
 // HW-870 IR Obstacle Sensor (analog output)
 #define HW870_PIN 21     // D21 - analog input
@@ -37,8 +38,15 @@ static bool lineFollowMode = false;           // OFF by default
 static uint16_t LINE_THRESHOLD = 1500;  // Sensor value above = on line (dark) - adjustable via THRESH command
 static uint32_t lastMiddleReleaseMs = 0;      // For double-press detection
 static bool middleDoublePending = false;       // Waiting for possible double-press
-static uint32_t lineFollowLastSearchMs = 0;   // For search pattern timing
-static int8_t lineFollowSearchDir = 1;         // 1 = right, -1 = left (search direction)
+
+// Line-follow motor tuning constants (ESP32 PWM 0-255)
+#define LINE_FORWARD_SPEED   120   // Both motors cruising speed
+#define LINE_CORRECT_FAST    170   // Outer (faster) wheel during correction
+#define LINE_CORRECT_SLOW     50   // Inner (slower) wheel during correction
+#define LINE_BURST_MS         40   // Burst duration on direction change
+
+static char lfLastDir = 'S';            // Track last correction direction for burst-then-cruise
+static uint32_t lfBurstStart = 0;       // When the current burst began
 
 // Motor control pins
 #define MOTOR1_FWD 16   // D16
@@ -395,6 +403,35 @@ void setMotorControl(CarCommand cmd) {
   }
 }
 
+// Raw motor control with independent left/right speeds.
+// Used by line-follow mode for proportional steering (both motors forward,
+// one faster than the other) instead of pivot-in-place turns.
+void setMotorsRaw(int leftSpeed, bool leftRev, int rightSpeed, bool rightRev) {
+  // Left motor (MOTOR1)
+  if (leftRev) {
+    digitalWrite(MOTOR1_FWD, LOW);
+    analogWrite(MOTOR1_REV, leftSpeed);
+  } else {
+    analogWrite(MOTOR1_FWD, leftSpeed);
+    digitalWrite(MOTOR1_REV, LOW);
+  }
+  // Right motor (MOTOR2)
+  if (rightRev) {
+    digitalWrite(MOTOR2_FWD, LOW);
+    analogWrite(MOTOR2_REV, rightSpeed);
+  } else {
+    analogWrite(MOTOR2_FWD, rightSpeed);
+    digitalWrite(MOTOR2_REV, LOW);
+  }
+}
+
+void stopMotorsRaw() {
+  digitalWrite(MOTOR1_FWD, LOW);
+  digitalWrite(MOTOR1_REV, LOW);
+  digitalWrite(MOTOR2_FWD, LOW);
+  digitalWrite(MOTOR2_REV, LOW);
+}
+
 void notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic,
               uint8_t* pData, size_t length, bool isNotify) {
   if (length < 8) return;
@@ -457,6 +494,7 @@ void notifyCB(NimBLERemoteCharacteristic* pRemoteCharacteristic,
     }
 
     pendingCommand = cmd;
+    hasNewCommand = true;
 
     Serial.print("CLICK: ");
     Serial.println((int)cmd);
@@ -539,56 +577,60 @@ bool isObstacleDetected() {
 }
 
 // Line-following update: called from loop() when lineFollowMode is active.
-// Uses HW-870 IR sensor on D21 to follow a black line on a light surface.
+// Line-following motor control — called directly from loop() when lineFollowMode is active.
+// Uses HW-870 IR sensor on D21 with edge-tracking:
 // HW-870: black absorbs IR → LOW reflection → HIGH analog value
 //         white reflects IR → HIGH reflection → LOW analog value
 // So: sensorVal > LINE_THRESHOLD means we're ON the black line.
 //
-// Single-sensor edge-following algorithm:
-// - On the line: drive FORWARD
-// - Off the line: the line curved away, turn to find it
-//   Start with a small turn, widen the search if line isn't found quickly.
-CarCommand lineFollowUpdate() {
+// Single-sensor edge-following:
+// The sensor straddles the line edge. When it sees dark (line), the car has
+// drifted too far toward the line and corrects away. When it sees light (floor),
+// the car has drifted away and corrects back toward the line.
+// Both motors always run forward — steering is done by speed differential,
+// not by stopping or reversing. Burst-then-cruise pattern from working Mega code.
+//
+// Swap the correction directions below if the sensor is mounted on the other side.
+void lineFollowMotors() {
   uint16_t sensorVal = readHW870();
   bool onLine = (sensorVal > LINE_THRESHOLD);
   uint32_t now = millis();
 
   if (onLine) {
-    // Sensor sees the black line -> drive forward
-    lineFollowLastSearchMs = now;
-    if (lineFollowSearchDir != 0) {
-      lineFollowSearchDir = 0;
-      Serial.println("Line: ON LINE -> forward");
-    }
-    return FORWARD;
-  }
-
-  // Lost the line -> search pattern: sweep to find which way it curved
-  uint32_t lostDuration = now - lineFollowLastSearchMs;
-
-  if (lostDuration < 150) {
-    // Keep current or default search direction (right)
-    if (lineFollowSearchDir == 0) {
-      lineFollowSearchDir = 1;
-      Serial.println("Line: LOST -> searching RIGHT");
-    }
-  } else if (lostDuration < 400) {
-    // Switch direction for wider search
-    if (lineFollowSearchDir > 0) {
-      lineFollowSearchDir = -1;
-      Serial.println("Line: still lost -> searching LEFT");
+    // ON dark line → car is too far toward the line → correct AWAY (right motor faster = turn left)
+    if (lfLastDir != 'L') {
+      // Direction change: brief stop + burst
+      lfLastDir = 'L';
+      lfBurstStart = now;
+      stopMotorsRaw();
+      delay(10);
+      setMotorsRaw(LINE_CORRECT_SLOW, false, LINE_FORWARD_SPEED, false);
+      Serial.println("Line: edge L");
+    } else if (now - lfBurstStart < LINE_BURST_MS) {
+      // Still in burst phase
+      setMotorsRaw(LINE_CORRECT_SLOW, false, LINE_FORWARD_SPEED, false);
+    } else {
+      // Cruise: gentle left correction
+      setMotorsRaw(LINE_CORRECT_SLOW, false, LINE_CORRECT_FAST, false);
     }
   } else {
-    // Wide sweep: keep alternating
-    if (lostDuration > 650) {
-      lineFollowSearchDir = -lineFollowSearchDir;
-      lineFollowLastSearchMs = now;
-      Serial.print("Line: sweeping -> ");
-      Serial.println(lineFollowSearchDir > 0 ? "RIGHT" : "LEFT");
+    // OFF line → car drifted away → correct TOWARD line (left motor faster = turn right)
+    if (lfLastDir != 'R') {
+      // Direction change: brief stop + burst
+      lfLastDir = 'R';
+      lfBurstStart = now;
+      stopMotorsRaw();
+      delay(10);
+      setMotorsRaw(LINE_FORWARD_SPEED, false, LINE_CORRECT_SLOW, false);
+      Serial.println("Line: edge R");
+    } else if (now - lfBurstStart < LINE_BURST_MS) {
+      // Still in burst phase
+      setMotorsRaw(LINE_FORWARD_SPEED, false, LINE_CORRECT_SLOW, false);
+    } else {
+      // Cruise: gentle right correction
+      setMotorsRaw(LINE_CORRECT_FAST, false, LINE_CORRECT_SLOW, false);
     }
   }
-
-  return (lineFollowSearchDir > 0) ? RIGHT : LEFT;
 }
 
 // Clear stale double-press pending state (call from loop)
@@ -857,8 +899,11 @@ void loop(){
     driveCmd = lineFollowUpdate();
   }
 
-  // BLE ring commands ALWAYS take priority (e.g. STOP button during line-follow)
-  if (pendingCommand != currentCommand) {
+  // BLE ring commands take priority (e.g. STOP button during line-follow)
+  // Only override when a genuinely new command arrived from the ring,
+  // not a stale one from a previous event.
+  if (hasNewCommand) {
+    hasNewCommand = false;
     driveCmd = pendingCommand;
   }
 
