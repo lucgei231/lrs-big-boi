@@ -44,7 +44,7 @@ static const uint16_t OBSTACLE_THRESHOLD = 2000;  // Adjust based on testing (0-
 
 // Line-following mode (toggled by double-press middle button)
 static bool lineFollowMode = false;           // OFF by default
-static uint16_t LINE_THRESHOLD = 1500;  // Sensor value above = on line (dark) - adjustable via THRESH command
+static uint16_t LINE_THRESHOLD = 1500;  // Sensor value BELOW = on line (dark/black absorbs IR) - adjustable via THRESH command
 static uint32_t lastMiddleReleaseMs = 0;      // For double-press detection
 static bool middleDoublePending = false;       // Waiting for possible double-press
 
@@ -834,67 +834,58 @@ bool isObstacleDetected() {
 }
 
 // Line-following motor control — called directly from loop() when lineFollowMode is active.
-// Uses HW-870 IR sensor on D21 with edge-tracking:
-// HW-870: black absorbs IR → LOW reflection → HIGH analog value
-//         white reflects IR → HIGH reflection → LOW analog value
-// So: sensorVal > LINE_THRESHOLD means we're ON the black line.
+// Uses HW-870 IR sensor on pin 14 (analog) with single-sensor edge-tracking.
+//
+// HW-870 physics: black absorbs IR → LOW analog value
+//                white reflects IR → HIGH analog value
+// So: sensorVal < LINE_THRESHOLD means we're ON the black line.
 //
 // Single-sensor edge-following:
 // The sensor straddles the line edge. When it sees dark (line), the car has
 // drifted too far toward the line and corrects away. When it sees light (floor),
 // the car has drifted away and corrects back toward the line.
-// Both motors always run forward — steering is done by speed differential,
-// not by stopping or reversing. Burst-then-cruise pattern from working Mega code.
+// Both motors always run forward — steering is by speed differential,
+// not by stopping or reversing.
 //
-// Swap the correction directions below if the sensor is mounted on the other side.
+// Burst-then-cruise: when correction direction changes (line edge crossed),
+// apply a strong speed differential briefly (LINE_BURST_MS) to quickly re-center,
+// then ease into a gentler cruising correction to follow the edge smoothly.
 void lineFollowMotors() {
   uint16_t sensorVal = readHW870();
-  bool onLine = (sensorVal > LINE_THRESHOLD);
+  // HW-870: LOW = dark/black (IR absorbed), HIGH = light/white (IR reflected)
+  bool onLine = (sensorVal < LINE_THRESHOLD);
   uint32_t now = millis();
 
-  // Non-blocking direction-change state: 0=cruise, 1=brake
-  static uint8_t lfPhase = 0;
-  static uint32_t lfPhaseStart = 0;
-
   if (onLine) {
-    // ON dark line → car is too far toward the line → correct AWAY (right motor faster = turn left)
+    // ON dark line → car drifted too far toward line → correct AWAY
+    // Right motor faster = turn left (away from line)
     if (lfLastDir != 'L') {
       lfLastDir = 'L';
-      lfPhase = 1;
-      lfPhaseStart = now;
-      stopMotorsRaw();
-      setMotorsRaw(LINE_CORRECT_SLOW, false, LINE_FORWARD_SPEED, false);
-      Serial.println("Line: edge L");
+      lfBurstStart = now;
+    }
+
+    if (now - lfBurstStart < LINE_BURST_MS) {
+      // Burst: strong correction to quickly get off the line
+      setMotorsRaw(LINE_CORRECT_SLOW, false, LINE_CORRECT_FAST, false);
     } else {
-      lfPhase = 0;
-      if (now - lfBurstStart < LINE_BURST_MS) {
-        setMotorsRaw(LINE_CORRECT_SLOW, false, LINE_FORWARD_SPEED, false);
-      } else {
-        setMotorsRaw(LINE_CORRECT_SLOW, false, LINE_CORRECT_FAST, false);
-      }
+      // Cruise: gentle correction, both motors forward with mild differential
+      setMotorsRaw(LINE_CORRECT_SLOW, false, LINE_FORWARD_SPEED, false);
     }
   } else {
-    // OFF line → car drifted away → correct TOWARD line (left motor faster = turn right)
+    // OFF line → car drifted away → correct TOWARD line
+    // Left motor faster = turn right (toward line)
     if (lfLastDir != 'R') {
       lfLastDir = 'R';
-      lfPhase = 1;
-      lfPhaseStart = now;
-      stopMotorsRaw();
-      setMotorsRaw(LINE_FORWARD_SPEED, false, LINE_CORRECT_SLOW, false);
-      Serial.println("Line: edge R");
-    } else {
-      lfPhase = 0;
-      if (now - lfBurstStart < LINE_BURST_MS) {
-        setMotorsRaw(LINE_FORWARD_SPEED, false, LINE_CORRECT_SLOW, false);
-      } else {
-        setMotorsRaw(LINE_CORRECT_FAST, false, LINE_CORRECT_SLOW, false);
-      }
+      lfBurstStart = now;
     }
-  }
-  // After brake phase, record burst start for next call
-  if (lfPhase == 1) {
-    lfBurstStart = now;
-    lfPhase = 0;
+
+    if (now - lfBurstStart < LINE_BURST_MS) {
+      // Burst: strong correction to quickly get back to the line edge
+      setMotorsRaw(LINE_CORRECT_FAST, false, LINE_CORRECT_SLOW, false);
+    } else {
+      // Cruise: gentle correction toward the line edge
+      setMotorsRaw(LINE_FORWARD_SPEED, false, LINE_CORRECT_SLOW, false);
+    }
   }
 }
 
