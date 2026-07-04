@@ -26,7 +26,7 @@ static const uint32_t OTA_MODE_TIMEOUT = 120000;  // 2 minutes
 static String serialBuffer = "";
 
 // RGB LED Configuration
-#define RGB_LED_PIN 14  // D14
+#define RGB_LED_PIN 22  // D21
 #define NUM_LEDS 12
 CRGB leds[NUM_LEDS];
 
@@ -36,7 +36,7 @@ volatile CarCommand pendingCommand = STOP;  // Command from BLE callback, applie
 static volatile bool hasNewCommand = false;     // True when BLE callback sets a fresh command
 
 // HW-870 IR Obstacle Sensor (analog output)
-#define HW870_PIN 21     // D21 - analog input
+#define HW870_PIN 14     // D21 - analog input
 static uint16_t hw870Raw = 0;
 static bool obstacleDetectionEnabled = false;
 static const uint16_t OBSTACLE_THRESHOLD = 2000;  // Adjust based on testing (0-4095)
@@ -457,7 +457,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .header{text-align:center}
 .header h1{font-size:2.2em;font-weight:800;background:linear-gradient(135deg,#7c6ff7,#c084fc,#f7546e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .header .ip{font-size:.7em;color:#666;margin-top:2px}
-.card{background:var(--card);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid var(--border);border-radius:18px;padding:16px;width:100%;max-width:400px}
+.card{basaund:var(--card);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid var(--border);border-radius:18px;padding:16px;width:100%;max-width:400px}
 .card-title{font-size:.7em;text-transform:uppercase;letter-spacing:3px;color:#666;margin-bottom:12px}
 /* D-Pad */
 .dpad{display:grid;grid-template:50px 50px 50px/50px 50px 50px;gap:6px;justify-content:center;margin:8px 0}
