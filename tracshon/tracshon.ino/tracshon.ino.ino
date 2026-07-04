@@ -4,6 +4,8 @@
 #include <ArduinoOTA.h>
 #include <WebServer.h>
 
+enum CarCommand : uint8_t { STOP, FORWARD, BACKWARD, LEFT, RIGHT };
+
 // Web command queue (set from handlers, consumed in loop)
 static CarCommand webPendingCmd = STOP;
 static bool webHasCmd = false;
@@ -30,7 +32,6 @@ static String serialBuffer = "";
 #define NUM_LEDS 12
 CRGB leds[NUM_LEDS];
 
-enum CarCommand : uint8_t { STOP, FORWARD, BACKWARD, LEFT, RIGHT };
 volatile CarCommand currentCommand = STOP;
 volatile CarCommand pendingCommand = STOP;  // Command from BLE callback, applied in main loop
 static volatile bool hasNewCommand = false;     // True when BLE callback sets a fresh command
